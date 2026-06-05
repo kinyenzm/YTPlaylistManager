@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="YTPlaylistManager.Server/YTPlaylistManager.Server.csproj" DisplayName="YTPlaylistManager.Server" />
+  <Project Path="YTPlaylistManager.client/YTPlaylistManager.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.1184077">
+  <PropertyGroup>
+    <StartupCommand>npm start</StartupCommand>
+    <JavaScriptTestFramework>Jasmine</JavaScriptTestFramework>
+    <JavaScriptTestRoot>src\</JavaScriptTestRoot>
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+    <PublishAssetsDirectory>dist\yt-playlist-manager\browser\</PublishAssetsDirectory>
+  </PropertyGroup>
+</Project>

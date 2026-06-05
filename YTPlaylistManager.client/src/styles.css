@@ -1,0 +1,81 @@
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --border: #262a33;
+  --text: #e8eaf0;
+  --muted: #9aa3b2;
+  --accent: #ff3b5c;
+  --accent2: #4f8cff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+a { color: var(--accent2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button {
+  background: var(--accent); color: white; border: 0;
+  padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+}
+button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+.row { display: flex; gap: 12px; align-items: center; }
+.muted { color: var(--muted); font-size: 0.9em; }
+.thumb { width: 80px; height: 60px; object-fit: cover; border-radius: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+header.app-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+.tag { background: var(--border); color: var(--text); padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
+.danger { color: var(--accent); }
+input[type=text], select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 8px; border-radius: 6px; width: 100%;
+}
+
+/* ── Overlay de proceso: bloquea la UI mientras corre una operación ── */
+.busy-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(15, 17, 21, 0.72);
+  display: flex; align-items: center; justify-content: center;
+}
+.busy-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px 28px; min-width: 320px; max-width: 90vw; text-align: center;
+}
+.busy-card h4 { margin: 0 0 14px; }
+.progress { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
+.progress > .bar { height: 100%; background: var(--accent2); border-radius: 999px; transition: width 0.3s ease; }
+/* Indeterminada: animación continua cuando no se conoce el % */
+.progress.indeterminate > .bar { width: 40%; animation: indet 1.1s ease-in-out infinite; }
+@keyframes indet {
+  0%   { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+/* ── Modal genérico (warning / confirmación) ── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(15, 17, 21, 0.72);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px 24px; min-width: 320px; max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.modal h3 { color: var(--text); }
+
+/* ── Card archivada: más opaca, checkbox deshabilitado ── */
+.card.archived { opacity: 0.55; }
+.archived-tag { background: var(--border); color: var(--muted); }
+
+/* Tag "en cola": una sola línea, recorta con … si no entra */
+.queued-tag {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  background: var(--accent2);
+  color: #fff;
+}

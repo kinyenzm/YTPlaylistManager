@@ -1,0 +1,54 @@
+# =====================
+# .NET / ASP.NET Core
+# =====================
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# NuGet
+**/packages/
+*.nupkg
+**/project.lock.json
+
+# =====================
+# Angular / Node.js
+# =====================
+**/node_modules/
+**/dist/
+**/.angular/
+**/tmp/
+**/out-tsc/
+npm-debug.log
+yarn-error.log
+
+# =====================
+# Datos persistentes locales (tokens OAuth + log de operaciones)
+# =====================
+**/data/
+
+# =====================
+# IDEs / OS
+# =====================
+.vscode/
+.idea/
+.claude/
+.playwright-mcp/
+*.iml
+.DS_Store
+Thumbs.db
+
+# =====================
+# Secrets
+# =====================
+*.env
+*.env.local
+appsettings.*.local.json
+**/appsettings.json
+!**/appsettings.test.json
+
+# Windows reserved name artifact
+nul
