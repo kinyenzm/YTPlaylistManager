@@ -1,0 +1,52 @@
+<a routerLink="/">{{ 'common.back' | translate }}</a>
+<h3>{{ 'cross.title' | translate }}</h3>
+<p class="muted">{{ 'cross.intro' | translate }}</p>
+
+<div class="row">
+  <button (click)="scan(false)" [disabled]="loading()">{{ 'cross.search' | translate }}</button>
+  <button class="secondary" (click)="scan(true)" [disabled]="loading()">{{ 'cross.rescan' | translate }}</button>
+</div>
+
+@if (error()) {
+  <div class="card danger" style="margin-top:12px">{{ error() }}</div>
+}
+
+@if (report(); as rep) {
+  <p class="muted" style="margin-top:12px">
+    {{ 'cross.summary' | translate:{ scanned: rep.scanned, total: rep.totalPlaylists, groups: rep.totalGroups } }}
+  </p>
+  @if (rep.failed > 0) {
+    <div class="card danger">
+      {{ 'cross.failed_warning' | translate:{ failed: rep.failed } }}
+    </div>
+  }
+
+  @if (rep.totalGroups === 0) {
+    <div class="card">{{ 'cross.empty' | translate }}</div>
+  }
+
+  @for (g of rep.groups; track g.videoId) {
+    <div class="card">
+      <div class="row">
+        <a [href]="'https://www.youtube.com/watch?v=' + g.videoId" target="_blank" rel="noopener">{{ g.title }}</a>
+        <span class="tag">{{ 'cross.in_count' | translate:{ count: g.playlistCount } }}</span>
+      </div>
+      <div class="muted" style="margin-top:6px">{{ 'cross.appears_in' | translate }}</div>
+      <ul style="margin:4px 0 0; padding-left:18px">
+        @for (p of g.playlists; track p.playlistId) {
+          <li><a [routerLink]="['/playlists', p.playlistId]">{{ p.playlistTitle }}</a></li>
+        }
+      </ul>
+    </div>
+  }
+}
+
+@if (loading()) {
+  <div class="busy-overlay">
+    <div class="busy-card">
+      <h4>{{ 'cross.busy_title' | translate }}</h4>
+      <div class="progress indeterminate"><div class="bar"></div></div>
+      <p class="muted" style="margin:12px 0 0">{{ 'cross.busy_desc' | translate }}</p>
+    </div>
+  </div>
+}

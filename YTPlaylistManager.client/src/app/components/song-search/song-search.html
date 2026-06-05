@@ -1,0 +1,161 @@
+<div class="card">
+  <h2>{{ 'search.title' | translate }}</h2>
+
+  @if (cacheStatus()) {
+    <div class="row">
+      <span class="muted">{{ cacheStatus()!.totalSongs }} {{ 'cache.stat_total_songs' | translate }}</span>
+      <span class="muted">{{ cacheStatus()!.playlistsCount }} {{ 'cache.stat_total_playlists' | translate }}</span>
+    </div>
+  }
+
+  <div class="search-group">
+    <div>
+      <label for="videoId">{{ 'search.label_id' | translate }}</label>
+      <input
+        id="videoId"
+        type="text"
+        [ngModel]="videoIdInput()"
+        (ngModelChange)="videoIdInput.set($event); onVideoIdChange()"
+        [placeholder]="'search.placeholder_id' | translate"
+      />
+    </div>
+
+    <div>
+      <label for="songName">{{ 'search.label_name' | translate }}</label>
+      <input
+        id="songName"
+        type="text"
+        [ngModel]="songNameInput()"
+        (ngModelChange)="songNameInput.set($event); onSongNameChange()"
+        [placeholder]="'search.placeholder_name' | translate"
+      />
+    </div>
+
+    <div>
+      <label for="scope">{{ 'search.label_scope' | translate }}</label>
+      <select [ngModel]="searchScope()" (ngModelChange)="searchScope.set($event)">
+        <option value="all">{{ 'search.scope_all' | translate }}</option>
+        <option value="active">{{ 'search.scope_active' | translate }}</option>
+        <option value="archived">{{ 'search.scope_archived' | translate }}</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <button (click)="performSearch()" [disabled]="!canSearch()">{{ 'search.search_button' | translate }}</button>
+    <button class="secondary" (click)="clearSearch()">{{ 'search.clear' | translate }}</button>
+  </div>
+
+  @if (isLoading()) {
+    <p class="muted">{{ 'search.searching' | translate }}</p>
+  }
+  @if (error()) {
+    <p class="danger">{{ error() }}</p>
+  }
+
+  @if (results().length > 0) {
+    <h3>{{ 'search.results_count' | translate:{ count: results().length } }}</h3>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>{{ 'search.col_id' | translate }}</th>
+            <th>{{ 'search.col_song' | translate }}</th>
+            <th>{{ 'search.col_channel' | translate }}</th>
+            <th>{{ 'search.col_playlist' | translate }}</th>
+            <th>{{ 'search.col_appears' | translate }}</th>
+            <th>{{ 'search.col_status' | translate }}</th>
+            <th>{{ 'search.col_actions' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (song of results(); track song.videoId) {
+            <tr>
+              <td>
+                <code>{{ song.videoId.substring(0, 8) }}</code>
+                <button class="icon" (click)="copyToClipboard(song.videoId)" [title]="'search.copy_title' | translate">📋</button>
+              </td>
+              <td>{{ song.title }}</td>
+              <td class="muted">{{ song.channelTitle }}</td>
+              <td>{{ song.currentPlaylistTitle || '—' }}</td>
+              <td>{{ song.appearsInCount }}</td>
+              <td>
+                @if (song.isDuplicate) {
+                  <span class="tag">{{ 'search.status_duplicate' | translate }}</span>
+                } @else if (song.wasMerged) {
+                  <span class="tag">{{ 'search.status_merged' | translate }}</span>
+                } @else {
+                  <span class="tag">{{ 'search.status_original' | translate }}</span>
+                }
+              </td>
+              <td>
+                <button class="icon" (click)="viewSongHistory(song.videoId)" [title]="'search.history_title' | translate">📊</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else if (!isLoading() && hasQuery()) {
+    <p class="muted">{{ 'search.no_results' | translate }}</p>
+  } @else if (!isLoading() && !hasQuery()) {
+    <p class="muted">{{ 'search.intro' | translate }}</p>
+  }
+</div>
+
+<style>
+  .search-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .search-group > div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .search-group label {
+    font-size: 0.9em;
+    font-weight: 500;
+  }
+  .table-wrapper {
+    overflow-x: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+  }
+  thead {
+    background: var(--panel);
+    border-bottom: 2px solid var(--accent);
+  }
+  th {
+    text-align: left;
+    padding: 8px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  td {
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr:hover {
+    background: rgba(79, 140, 255, 0.1);
+  }
+  code {
+    font-size: 0.8em;
+    background: var(--panel);
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+  button.icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    padding: 0;
+    margin-left: 4px;
+  }
+</style>

@@ -1,0 +1,366 @@
+<div class="card">
+  <div class="header">
+    <h2>{{ 'cache.title' | translate }}</h2>
+    <div class="row">
+      <button (click)="refreshCache()" class="secondary">{{ 'cache.refresh' | translate }}</button>
+      <button (click)="exportCacheAsJson()" class="secondary">{{ 'cache.export' | translate }}</button>
+    </div>
+  </div>
+
+  @if (isLoading()) {
+    <p class="muted">{{ 'cache.loading' | translate }}</p>
+  }
+  @if (error()) {
+    <p class="danger">{{ error() }}</p>
+  }
+
+  <div class="tabs">
+    <button
+      (click)="switchTab('dashboard')"
+      [class.active]="activeTab() === 'dashboard'"
+      class="tab-btn"
+    >
+      {{ 'cache.tab_dashboard' | translate }}
+    </button>
+    <button
+      (click)="switchTab('archived')"
+      [class.active]="activeTab() === 'archived'"
+      class="tab-btn"
+    >
+      {{ 'cache.tab_archived' | translate:{ count: archivedPlaylists().length } }}
+    </button>
+    <button
+      (click)="switchTab('reviews')"
+      [class.active]="activeTab() === 'reviews'"
+      class="tab-btn"
+    >
+      {{ 'cache.tab_reviews' | translate:{ count: mergeReviews().length } }}
+    </button>
+  </div>
+
+  @if (activeTab() === 'dashboard' && cacheStatus()) {
+    <div class="tab-content">
+      <div class="grid">
+        <div class="stat-card">
+          <div>🎵</div>
+          <div>
+            <p class="muted">{{ 'cache.stat_total_playlists' | translate }}</p>
+            <p class="large">{{ cacheStatus()!.playlistsCount }}</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div>🎶</div>
+          <div>
+            <p class="muted">{{ 'cache.stat_total_songs' | translate }}</p>
+            <p class="large">{{ cacheStatus()!.totalSongs }}</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div>🔀</div>
+          <div>
+            <p class="muted">{{ 'cache.stat_merges' | translate }}</p>
+            <p class="large">{{ cacheStatus()!.mergesCount }}</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div>📦</div>
+          <div>
+            <p class="muted">{{ 'cache.stat_archived' | translate }}</p>
+            <p class="large">{{ cacheStatus()!.archivedPlaylistsCount }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (activeTab() === 'archived') {
+    <div class="tab-content">
+      @if (archivedPlaylists().length > 0) {
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'cache.archived_col_original' | translate }}</th>
+              <th>{{ 'cache.archived_col_into' | translate }}</th>
+              <th>{{ 'cache.archived_col_songs' | translate }}</th>
+              <th>{{ 'cache.archived_col_when' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of archivedPlaylists(); track p.id) {
+              <tr>
+                <td>
+                  <strong>{{ p.title }}</strong>
+                  <br />
+                  <code class="muted">{{ p.id }}</code>
+                </td>
+                <td>{{ p.mergedIntoPlaylistTitle }}</td>
+                <td>{{ p.songsCount }}</td>
+                <td class="muted">{{ p.archivedAt | date: 'short' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="muted">{{ 'cache.archived_empty' | translate }}</p>
+      }
+    </div>
+  }
+
+  @if (activeTab() === 'reviews') {
+    <div class="tab-content">
+      @if (mergeReviews().length > 0) {
+        <table>
+          <thead>
+            <tr>
+              <th>{{ 'cache.review_col_target' | translate }}</th>
+              <th>{{ 'cache.review_col_sources' | translate }}</th>
+              <th>{{ 'cache.review_col_new' | translate }}</th>
+              <th>{{ 'cache.review_col_dup' | translate }}</th>
+              <th>{{ 'cache.review_col_when' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of mergeReviews(); track r.id) {
+              <tr>
+                <td>
+                  <strong>{{ r.targetPlaylistTitle }}</strong>
+                  <br />
+                  <code class="muted">{{ r.targetPlaylistId }}</code>
+                </td>
+                <td>
+                  @for (s of r.sources; track s.playlistId) {
+                    <div>{{ s.title }} <span class="muted">({{ s.itemCount }})</span></div>
+                  }
+                  @if (r.deleteSources) {
+                    <div class="muted" style="margin-top:4px">📦 {{ 'cache.review_archived_badge' | translate }}</div>
+                  }
+                </td>
+                <td>{{ r.newSongsCount }}</td>
+                <td>{{ r.duplicateSongsCount }}</td>
+                <td class="muted">{{ r.createdAtUtc | date: 'short' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <p class="muted">{{ 'cache.review_empty' | translate }}</p>
+      }
+    </div>
+  }
+
+  @if (selectedSongHistory()) {
+    <div class="modal-overlay" (click)="closeHistoryModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>{{ 'cache.history_title' | translate }}</h3>
+          <button class="close-btn" (click)="closeHistoryModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <p>
+            <strong>{{ 'cache.video_id_label' | translate }}</strong>
+            <code>{{ selectedSongHistory()!.videoId }}</code>
+          </p>
+          <p>
+            <strong>{{ 'cache.song_label' | translate }}</strong>
+            {{ selectedSongHistory()!.songTitle }}
+          </p>
+
+          @if (selectedSongHistory()!.events.length > 0) {
+            <div class="timeline">
+              @for (evt of selectedSongHistory()!.events; track $index) {
+                <div class="timeline-item">
+                  <div class="dot"></div>
+                  <div>
+                    <p class="accent"><strong>{{ evt.eventType }}</strong></p>
+                    <p class="muted">
+                      {{ evt.playlistTitle }}
+                      @if (evt.position >= 0) {
+                        <span>#{{ evt.position }}</span>
+                      }
+                    </p>
+                    <p class="muted">{{ evt.date | date: 'medium' }}</p>
+                    @if (evt.reason) {
+                      <p class="muted"><em>{{ evt.reason }}</em></p>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="muted">{{ 'cache.no_events' | translate }}</p>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<style>
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .tab-btn {
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s;
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content {
+    animation: fadeIn 0.2s;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .stat-card {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .stat-card > div:first-child {
+    font-size: 2em;
+  }
+
+  .stat-card p {
+    margin: 2px 0;
+  }
+
+  .stat-card .large {
+    font-size: 1.6em;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+  }
+
+  thead {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th,
+  td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  code {
+    font-size: 0.8em;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 17, 21, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h3 {
+    margin: 0;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1.2em;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .timeline {
+    margin-top: 16px;
+  }
+
+  .timeline-item {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+
+  .accent {
+    color: var(--accent);
+  }
+</style>

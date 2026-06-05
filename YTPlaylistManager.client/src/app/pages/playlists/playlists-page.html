@@ -1,0 +1,267 @@
+<div class="row" style="justify-content:space-between">
+  <h3 style="margin:0">{{ 'playlists.title' | translate }}</h3>
+  @if (authenticated()) {
+    <button class="secondary" (click)="openRefreshConfirm()" [disabled]="loading() || refreshing()">
+      @if (refreshing()) {
+        {{ 'playlists.refresh_all_in_progress' | translate:{ playlists: refreshEstimate().playlists } }}
+      } @else {
+        {{ 'playlists.refresh_all' | translate }}
+      }
+    </button>
+  }
+</div>
+<p class="muted">{{ 'playlists.intro' | translate }}</p>
+
+@if (pendingUploads().length > 0) {
+  <div class="card" style="border-color:var(--accent2)">
+    <div class="row" style="justify-content:space-between">
+      <strong>⬆ {{ 'playlists.pending_banner' | translate:{ changes: pendingUploads().length, songs: pendingTotalSongs() } }}</strong>
+      <button (click)="openPendingPanel()">{{ 'playlists.pending_review' | translate }}</button>
+    </div>
+  </div>
+}
+
+@if (authChecked() && !authenticated()) {
+  <div class="card">{{ 'playlists.not_connected' | translate }}</div>
+}
+
+@if (loading()) {
+  <div>{{ 'common.loading' | translate }}</div>
+}
+
+@if (error()) {
+  <div class="card danger">{{ error() }}</div>
+}
+
+@if (selectedIds().size > 1) {
+  <div class="card">
+    <strong>{{ 'playlists.selection_title' | translate:{ count: selectedIds().size } }}</strong>
+
+    <div class="row" style="margin-top:8px">
+      <label class="muted">{{ 'playlists.merge_into' | translate }}</label>
+      <select [ngModel]="targetId()" (ngModelChange)="targetOverride.set($event)">
+        @for (p of selectedPlaylists(); track p.id) {
+          <option [value]="p.id">{{ 'playlists.merge_option' | translate:{ title: p.title, count: p.itemCount } }}</option>
+        }
+      </select>
+      <button (click)="openPreview()" [disabled]="merging() || previewing()">
+        {{ (previewing() ? 'playlists.previewing' : 'playlists.preview_button') | translate }}
+      </button>
+    </div>
+    <div class="muted" style="margin-top:4px">{{ 'playlists.merge_helper' | translate }}</div>
+    @if (mergeResult(); as mr) {
+      <div class="muted" style="margin-top:8px">{{ 'playlists.merge_staged' | translate:{ n: mr.added } }}</div>
+    }
+  </div>
+}
+
+<div class="grid">
+  @for (p of playlists(); track p.id) {
+    <div class="card" [class.archived]="p.isArchived || p.queuedForMerge">
+      <div class="row">
+        <input
+          type="checkbox"
+          [checked]="selectedIds().has(p.id)"
+          [disabled]="p.isArchived || p.queuedForMerge"
+          (change)="toggle(p.id)" />
+        @if (p.thumbnailUrl) {
+          <img [src]="p.thumbnailUrl" class="thumb" alt="" />
+        }
+      </div>
+      <h4 style="margin:8px 0 4px">
+        <a [routerLink]="['/playlists', p.id]">{{ p.title }}</a>
+        @if (p.isArchived) {
+          <span class="tag archived-tag" [title]="p.archivedIntoPlaylistTitle ?? ''">
+            {{ 'playlists.archived_tag' | translate }}
+          </span>
+        }
+      </h4>
+      @if (p.queuedForMerge) {
+        <div style="margin:0 0 6px">
+          <span class="tag queued-tag" [title]="('playlists.queued_tag' | translate:{ title: p.queuedIntoTitle })">
+            {{ 'playlists.queued_tag' | translate:{ title: p.queuedIntoTitle } }}
+          </span>
+        </div>
+      }
+      <div class="row" style="gap:6px">
+        <span class="muted">{{ 'playlists.songs_count' | translate:{ count: p.itemCount } }}</span>
+        @switch (p.privacy) {
+          @case ('public') { <span class="tag">{{ 'playlists.privacy_public' | translate }}</span> }
+          @case ('private') { <span class="tag">{{ 'playlists.privacy_private' | translate }}</span> }
+          @case ('unlisted') { <span class="tag">{{ 'playlists.privacy_unlisted' | translate }}</span> }
+        }
+      </div>
+      @if (p.description) {
+        <div class="muted">{{ p.description }}</div>
+      }
+    </div>
+  }
+</div>
+
+@if (refreshConfirmOpen()) {
+  <div class="modal-backdrop" (click)="cancelRefresh()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <h3 style="margin-top:0">⚠ {{ 'playlists.refresh_all_confirm_title' | translate }}</h3>
+      <p>{{ 'playlists.refresh_all_confirm_body' | translate:{ playlists: refreshEstimate().playlists, quota: refreshEstimate().quota } }}</p>
+      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="secondary" (click)="cancelRefresh()">{{ 'common.cancel' | translate }}</button>
+        <button (click)="confirmRefresh()">{{ 'playlists.refresh_all' | translate }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (refreshResult(); as r) {
+  <div class="modal-backdrop" (click)="dismissRefreshResult()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <h3 style="margin-top:0">✓ {{ 'playlists.refresh_all_done' | translate:{ playlists: r.playlistsRefreshed, items: r.itemsRefreshed, quota: r.quotaUsed } }}</h3>
+      @if (r.playlistsSkipped > 0) {
+        <p class="muted">{{ 'playlists.refresh_all_partial' | translate:{ skipped: r.playlistsSkipped } }}</p>
+      }
+      <div class="row" style="justify-content:flex-end;margin-top:16px">
+        <button (click)="dismissRefreshResult()">OK</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (preview(); as pv) {
+  <div class="modal-backdrop" (click)="cancelPreview()">
+    <div class="modal" (click)="$event.stopPropagation()" style="max-width:640px;max-height:82vh;overflow:auto">
+      <h3 style="margin-top:0">{{ 'playlists.preview_title' | translate:{ title: pv.targetPlaylistTitle } }}</h3>
+      <p class="muted">{{ 'playlists.preview_summary' | translate:{ add: pv.toAddCount, present: pv.alreadyPresentCount } }}</p>
+
+      @for (w of pv.warnings; track w) {
+        <div class="card danger" style="padding:8px 12px;margin-bottom:8px">⚠ {{ w }}</div>
+      }
+
+      @if (pv.toAddCount === 0) {
+        <div class="card">{{ 'playlists.preview_nothing' | translate }}</div>
+      } @else {
+        <div style="margin:8px 0">
+          @for (s of pv.toAdd; track s.videoId) {
+            <div class="row" style="margin-top:8px;align-items:flex-start">
+              @if (s.thumbnailUrl) {
+                <img [src]="s.thumbnailUrl" class="thumb" alt="" />
+              }
+              <div>
+                <div>{{ s.title }}</div>
+                <div class="muted">{{ s.channelTitle }}</div>
+                <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:2px">
+                  <span class="muted">{{ 'playlists.preview_from' | translate }}</span>
+                  @for (f of s.fromPlaylists; track f) {
+                    <span class="tag">{{ f }}</span>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px">
+        <span class="muted">{{ 'playlists.preview_quota' | translate:{ quota: pv.estimatedQuotaUnits } }}</span>
+        <div class="row" style="gap:8px">
+          <button class="secondary" (click)="cancelPreview()">{{ 'common.cancel' | translate }}</button>
+          <button (click)="merge()">
+            {{ (pv.toAddCount > 0 ? 'playlists.preview_confirm' : 'playlists.preview_confirm_redundant') | translate:{ add: pv.toAddCount } }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+@if (showPendingPanel()) {
+  <div class="modal-backdrop" (click)="closePendingPanel()">
+    <div class="modal" (click)="$event.stopPropagation()" style="max-width:680px;max-height:84vh;overflow:auto">
+      <h3 style="margin-top:0">{{ 'playlists.pending_title' | translate }}</h3>
+      <p class="muted">{{ 'playlists.pending_intro' | translate }}</p>
+
+      @if (uploadResult(); as ur) {
+        <div class="card" style="border-color:var(--accent2)">
+          ✓ {{ 'playlists.upload_done' | translate:{ uploaded: ur.uploaded } }}
+          @if (ur.paused) {
+            <div class="muted danger" style="margin-top:4px">{{ 'playlists.upload_paused' | translate:{ remaining: ur.remainingPending, sources: ur.remainingSources } }}</div>
+          }
+          @if (ur.failed > 0) {
+            <div class="muted" style="margin-top:4px">{{ 'playlists.upload_failed' | translate:{ failed: ur.failed } }}</div>
+          }
+          @if (ur.deletedSources > 0) {
+            <div class="muted" style="margin-top:4px">{{ 'playlists.upload_deleted' | translate:{ n: ur.deletedSources } }}</div>
+          }
+        </div>
+      }
+
+      @if (pendingUploads().length === 0) {
+        <div class="card">{{ 'playlists.pending_empty' | translate }}</div>
+      }
+
+      @for (pu of pendingUploads(); track pu.id) {
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <strong>{{ pu.targetPlaylistTitle }}</strong>
+            <span class="tag">{{ 'playlists.pending_count' | translate:{ n: pu.itemCount } }}</span>
+          </div>
+          <div class="muted" style="margin:4px 0">{{ 'playlists.pending_quota' | translate:{ quota: pu.estimatedQuotaUnits } }}</div>
+          @if (pu.sourceTitles.length > 0) {
+            <div class="muted danger" style="margin:4px 0">🗑 {{ 'playlists.pending_will_delete' | translate:{ sources: pu.sourceTitles.join(', ') } }}</div>
+          }
+          <details>
+            <summary class="muted" style="cursor:pointer">{{ 'playlists.pending_show_songs' | translate }}</summary>
+            <div style="margin-top:6px">
+              @for (s of pu.items; track s.videoId) {
+                <div class="row" style="margin-top:6px;align-items:flex-start">
+                  @if (s.thumbnailUrl) {
+                    <img [src]="s.thumbnailUrl" class="thumb" alt="" />
+                  }
+                  <div>
+                    <div>{{ s.title }}</div>
+                    <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:2px">
+                      <span class="muted">{{ 'playlists.preview_from' | translate }}</span>
+                      @for (f of s.fromPlaylists; track f) {
+                        <span class="tag">{{ f }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </details>
+          <div class="row" style="gap:8px;margin-top:10px">
+            <button (click)="uploadPending(pu.id)" [disabled]="uploadingId() !== null">
+              {{ (uploadingId() === pu.id ? 'playlists.uploading' : 'playlists.upload_button') | translate:{ quota: pu.estimatedQuotaUnits } }}
+            </button>
+            <button class="secondary" (click)="discardPending(pu.id)" [disabled]="uploadingId() !== null">
+              {{ 'playlists.pending_discard' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <div class="row" style="justify-content:flex-end;margin-top:12px">
+        <button class="secondary" (click)="closePendingPanel()">{{ 'common.close' | translate }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (merging()) {
+  <div class="busy-overlay">
+    <div class="busy-card">
+      <h4>{{ 'playlists.merge_apply_title' | translate }}</h4>
+      <div class="progress indeterminate"><div class="bar"></div></div>
+      <p class="muted" style="margin:12px 0 0">{{ 'playlists.merge_apply_desc' | translate }}</p>
+    </div>
+  </div>
+}
+
+@if (uploadingId()) {
+  <div class="busy-overlay">
+    <div class="busy-card">
+      <h4>{{ 'playlists.merge_busy_title' | translate }}</h4>
+      <div class="progress indeterminate"><div class="bar"></div></div>
+      <p class="muted" style="margin:12px 0 0">{{ 'playlists.merge_busy_desc' | translate }}</p>
+    </div>
+  </div>
+}

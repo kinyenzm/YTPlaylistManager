@@ -1,0 +1,97 @@
+<a routerLink="/">{{ 'common.back' | translate }}</a>
+<h3>{{ duplicates()?.playlistTitle || ('detail.default_title' | translate) }}</h3>
+
+<div class="card">
+  <strong>{{ 'detail.actions' | translate }}</strong>
+  <div class="row" style="margin-top:8px">
+    <button (click)="loadDuplicates()" [disabled]="loadingDup()">{{ 'detail.find_dup' | translate }}</button>
+    <select [ngModel]="strategy()" (ngModelChange)="strategy.set($event)">
+      <option value="videoId">{{ 'detail.strategy_videoId' | translate }}</option>
+      <option value="normalizedTitle">{{ 'detail.strategy_normalizedTitle' | translate }}</option>
+    </select>
+    <button class="secondary danger" (click)="cleanDuplicates()" [disabled]="cleaning()">
+      {{ 'detail.remove_dup' | translate }}
+    </button>
+
+    <select [ngModel]="mode()" (ngModelChange)="mode.set($event)">
+      <option value="genre">{{ 'detail.mode_genre' | translate }}</option>
+      <option value="mood">{{ 'detail.mode_mood' | translate }}</option>
+      <option value="decade">{{ 'detail.mode_decade' | translate }}</option>
+    </select>
+    <button (click)="classify()" [disabled]="classifying()">{{ 'detail.classify' | translate }}</button>
+  </div>
+</div>
+
+@if (loadingDup()) {
+  <div class="muted">{{ 'detail.finding' | translate }}</div>
+}
+
+@if (duplicates(); as dup) {
+  <div class="card">
+    <strong>{{ 'detail.dup_summary' | translate:{ count: dup.duplicateCount, total: dup.totalItems } }}</strong>
+    @for (g of dup.groups; track g.key) {
+      <div style="margin-top:10px">
+        <div class="tag">{{ g.matchType === 'videoId' ? ('detail.match_videoId' | translate) : ('detail.match_normalizedTitle' | translate) }}</div>
+        @for (it of g.items; track it.playlistItemId) {
+          <div class="row" style="margin-top:4px">
+            @if (it.thumbnailUrl) {
+              <img [src]="it.thumbnailUrl" class="thumb" alt="" />
+            }
+            <div>
+              <div>{{ it.title }}</div>
+              <div class="muted">#{{ it.position }} · {{ it.channelTitle }}</div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
+
+@if (classifying()) {
+  <div class="muted">{{ 'detail.classifying' | translate }}</div>
+}
+
+@if (classification(); as cls) {
+  <div class="card">
+    <strong>{{ 'detail.classified' | translate:{ mode: (cls.mode === 'genre' ? ('detail.mode_label_genre' | translate) : (cls.mode === 'mood' ? ('detail.mode_label_mood' | translate) : ('detail.mode_label_decade' | translate))) } }}</strong>
+    @for (key of classKeys(); track key) {
+      <div style="margin-top:10px">
+        <h4 style="margin:6px 0">{{ key }} ({{ cls.groups[key].length }})</h4>
+        <ul style="margin:0; padding-left:18px">
+          @for (s of cls.groups[key]; track s.videoId) {
+            <li>{{ s.title }}</li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+}
+
+<h4>{{ 'detail.songs' | translate:{ count: items().length } }}</h4>
+@for (it of items(); track it.playlistItemId) {
+  <div class="row" style="margin-bottom:6px">
+    <span class="muted" style="width:30px">{{ it.position }}</span>
+    @if (it.thumbnailUrl) {
+      <img [src]="it.thumbnailUrl" class="thumb" alt="" />
+    }
+    <div>
+      <div>{{ it.title }}</div>
+      <div class="muted">{{ it.channelTitle }}</div>
+    </div>
+  </div>
+}
+
+@if (loadingDup() || cleaning() || classifying()) {
+  <div class="busy-overlay">
+    <div class="busy-card">
+      <h4>
+        @if (cleaning()) { {{ 'detail.busy_cleaning' | translate }} }
+        @else if (classifying()) { {{ 'detail.busy_classifying' | translate }} }
+        @else { {{ 'detail.busy_finding' | translate }} }
+      </h4>
+      <div class="progress indeterminate"><div class="bar"></div></div>
+      <p class="muted" style="margin:12px 0 0">{{ 'detail.busy_desc' | translate }}</p>
+    </div>
+  </div>
+}
