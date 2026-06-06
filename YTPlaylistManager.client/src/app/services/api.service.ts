@@ -3,10 +3,10 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   Playlist, PlaylistItem, DuplicateReport, MergeRequest, MergeResult, MergePreview,
-  PendingUpload, UploadResult,
-  ClassifyResult, AuthStatus, CrossDuplicateReport, PendingMerge,
+  PendingUpload, UploadResult, PendingSongMove, SongMoveUploadResult,
+  ClassifyResult, AuthStatus, CrossDuplicateReport,
   SongSearchQuery, SongSearchResult, CacheStatus, SongMovementLog,
-  PlaylistArchivedInfo, DuplicateAnalysis, MergeReviewSummary
+  PlaylistArchivedInfo, MergeReviewSummary
 } from '../models/models';
 import { environment } from '../../environments/environment';
 
@@ -66,6 +66,32 @@ export class ApiService {
   discardPending(id: string): Observable<unknown> {
     return this.http.delete(`${this.base}/playlists/pending-uploads/${id}`);
   }
+
+  // --- Asignar canción a playlists (staged) ---
+  assignSong(req: {
+    videoId: string;
+    title: string;
+    channelTitle?: string | null;
+    thumbnailUrl?: string | null;
+    desiredPlaylistIds: string[];
+  }): Observable<PendingSongMove | null> {
+    return this.http.post<PendingSongMove | null>(`${this.base}/songs/assign`, req);
+  }
+  pendingSongMoves(): Observable<PendingSongMove[]> {
+    return this.http.get<PendingSongMove[]>(`${this.base}/songs/pending-moves`);
+  }
+  uploadSongMove(id: string): Observable<SongMoveUploadResult> {
+    return this.http.post<SongMoveUploadResult>(`${this.base}/songs/pending-moves/${id}/upload`, {});
+  }
+  discardSongMove(id: string): Observable<unknown> {
+    return this.http.delete(`${this.base}/songs/pending-moves/${id}`);
+  }
+  songLocations(videoId: string): Observable<string[]> {
+    return this.http.get<string[]>(`${this.base}/songs/${videoId}/locations`);
+  }
+  removeSongsFromPlaylist(playlistId: string, videoIds: string[]): Observable<{ staged: number }> {
+    return this.http.post<{ staged: number }>(`${this.base}/songs/remove-from-playlist`, { playlistId, videoIds });
+  }
   classify(id: string, mode: 'genre' | 'mood' | 'decade'): Observable<ClassifyResult> {
     return this.http.post<ClassifyResult>(`${this.base}/playlists/${id}/classify`, { playlistId: id, mode });
   }
@@ -89,11 +115,5 @@ export class ApiService {
   }
   getMergeReviews(): Observable<MergeReviewSummary[]> {
     return this.http.get<MergeReviewSummary[]>(`${this.base}/cache/merge-reviews`);
-  }
-
-  // --- Analysis (Pre-Merge) ---
-  analyzeDuplicates(playlistIds: string[], targetPlaylistId?: string): Observable<DuplicateAnalysis> {
-    const qs = targetPlaylistId ? `?target=${encodeURIComponent(targetPlaylistId)}` : '';
-    return this.http.post<DuplicateAnalysis>(`${this.base}/analysis/duplicates${qs}`, playlistIds);
   }
 }

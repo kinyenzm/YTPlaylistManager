@@ -96,14 +96,6 @@ export interface UploadResult {
   remainingSources: number;
 }
 
-export interface PendingMerge {
-  id: string;
-  targetPlaylistId: string;
-  targetPlaylistTitle: string;
-  pendingCount: number;
-  createdAtUtc: string;
-}
-
 export interface ClassifiedSong {
   videoId: string;
   title: string;
@@ -140,6 +132,27 @@ export interface CrossDuplicateReport {
   groups: CrossDuplicate[];
   scanned: number;
   failed: number;
+}
+
+export interface PendingSongMove {
+  id: string;
+  videoId: string;
+  title: string;
+  thumbnailUrl?: string | null;
+  addTo: string[];
+  removeFrom: string[];
+  estimatedQuotaUnits: number;
+  createdAtUtc: string;
+}
+
+export interface SongMoveUploadResult {
+  id: string;
+  videoId: string;
+  added: number;
+  removed: number;
+  failed: number;
+  paused: boolean;
+  remainingOps: number;
 }
 
 // ── Búsqueda bidireccional ──
@@ -221,32 +234,3 @@ export interface MergeReviewSummary {
 
 // ── Pre-análisis de merge ──
 
-export interface PlaylistDuplicateAnalysis {
-  playlistId: string;
-  playlistTitle: string;
-  itemCount: number;
-  duplicatesByVideoId: number;
-  duplicatesByTitle: number;
-  uniqueItems: number;
-}
-
-export interface MergePreviewItem {
-  videoId: string;
-  title: string;
-  channelTitle?: string | null;
-  sourcePlaylistId: string;
-  sourcePlaylistTitle: string;
-  status: 'new' | 'duplicate';
-}
-
-export interface DuplicateAnalysis {
-  playlistCount: number;
-  playlistAnalysis: PlaylistDuplicateAnalysis[];
-  estimatedQuotaCost: number;
-  totalDuplicatesExact: number;
-  totalDuplicatesFuzzy: number;
-  totalUniqueItems: number;
-  preview?: MergePreviewItem[] | null;
-  previewTotalNew?: number;
-  previewTruncated?: boolean;
-}

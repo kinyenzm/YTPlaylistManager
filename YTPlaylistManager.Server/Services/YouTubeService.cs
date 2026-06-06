@@ -23,6 +23,7 @@ public class YouTubeService : IYouTubeService
     private readonly ArchivedPlaylistsStore _archivedStore;
     private readonly MergeReviewStore _reviewStore;
     private readonly PendingUploadStore _pendingUploads;
+    private readonly PendingSongMoveStore _songMoves;
     private readonly ApiKeyPool _apiKeyPool;
     private readonly ILogger<YouTubeService> _logger;
 
@@ -35,6 +36,7 @@ public class YouTubeService : IYouTubeService
         ArchivedPlaylistsStore archivedStore,
         MergeReviewStore reviewStore,
         PendingUploadStore pendingUploads,
+        PendingSongMoveStore songMoves,
         ApiKeyPool apiKeyPool,
         ILogger<YouTubeService> logger)
     {
@@ -46,6 +48,7 @@ public class YouTubeService : IYouTubeService
         _archivedStore = archivedStore;
         _reviewStore = reviewStore;
         _pendingUploads = pendingUploads;
+        _songMoves = songMoves;
         _apiKeyPool = apiKeyPool;
         _logger = logger;
     }
@@ -746,6 +749,225 @@ public class YouTubeService : IYouTubeService
 
         _pendingUploads.Remove(id);
         _log.Add("DiscardPending", $"pending={id} target={plan.TargetPlaylistId} reverted={plan.Items.Count}");
+    }
+
+    // ── Asignar una canción a playlists (staged: local → pendiente → subir) ──
+
+    /// <summary>Playlists de la cuenta que contienen el videoId, con su playlistItemId (solo caché).</summary>
+    private Dictionary<string, (string Title, string ItemId)> CurrentSongLocations(string userKey, string videoId)
+    {
+        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
+        var cache = _cacheStore.Load();
+        if (cache?.Playlists is null) return map;
+        foreach (var pl in cache.Playlists)
+        {
+            var items = _itemsCache.Load(userKey, pl.Id);
+            var hit = items?.FirstOrDefault(i => i.VideoId == videoId);
+            if (hit is not null) map[pl.Id] = (pl.Title, hit.PlaylistItemId);
+        }
+        return map;
+    }
+
+    private static PendingSongMoveDto ToDto(PendingSongMove m) => new(
+        m.Id, m.VideoId, m.Title, m.ThumbnailUrl,
+        m.AddTo.Select(a => a.PlaylistTitle).ToList(),
+        m.RemoveFrom.Select(r => r.PlaylistTitle).ToList(),
+        (m.AddTo.Count + m.RemoveFrom.Count) * 50,
+        m.CreatedAtUtc);
+
+    /// <summary>Aplica en local la reasignación (agregar/quitar) y la deja pendiente de subir.</summary>
+    public PendingSongMoveDto? StageSongAssignment(AssignSongRequest req)
+    {
+        if (string.IsNullOrEmpty(req.VideoId)) throw new ArgumentException("VideoId requerido.");
+        var userKey = CurrentUserKey();
+        var cache = _cacheStore.Load();
+        var titleById = cache?.Playlists?.ToDictionary(p => p.Id, p => p.Title) ?? new();
+
+        var current = CurrentSongLocations(userKey, req.VideoId);
+        var desired = new HashSet<string>(req.DesiredPlaylistIds ?? [], StringComparer.Ordinal);
+
+        var addTo = new List<SongMoveTarget>();
+        var removeFrom = new List<SongMoveRemoval>();
+
+        foreach (var pid in desired)
+        {
+            if (current.ContainsKey(pid)) continue;
+            addTo.Add(new SongMoveTarget
+            {
+                PlaylistId = pid,
+                PlaylistTitle = titleById.GetValueOrDefault(pid, pid),
+                LocalItemId = $"pending-{Guid.NewGuid():N}",
+            });
+        }
+        foreach (var (pid, info) in current)
+        {
+            if (desired.Contains(pid)) continue;
+            removeFrom.Add(new SongMoveRemoval { PlaylistId = pid, PlaylistTitle = info.Title, PlaylistItemId = info.ItemId });
+        }
+
+        if (addTo.Count == 0 && removeFrom.Count == 0) return null;
+
+        // Aplicar en LOCAL: agregar items sintéticos / quitar de la caché.
+        foreach (var t in addTo)
+        {
+            var items = _itemsCache.Load(userKey, t.PlaylistId) ?? new List<PlaylistItemDto>();
+            int pos = items.Count == 0 ? 0 : items.Max(i => i.Position) + 1;
+            _itemsCache.Save(userKey, t.PlaylistId,
+                items.Append(new PlaylistItemDto(t.LocalItemId, req.VideoId, req.Title, req.ChannelTitle, pos, req.ThumbnailUrl)).ToList());
+        }
+        foreach (var r in removeFrom)
+        {
+            var items = _itemsCache.Load(userKey, r.PlaylistId);
+            if (items is null) continue;
+            _itemsCache.Save(userKey, r.PlaylistId, items.Where(i => i.PlaylistItemId != r.PlaylistItemId).ToList());
+        }
+
+        var move = new PendingSongMove
+        {
+            Id = Guid.NewGuid().ToString("N")[..12],
+            UserKey = userKey,
+            VideoId = req.VideoId,
+            Title = req.Title,
+            ChannelTitle = req.ChannelTitle,
+            ThumbnailUrl = req.ThumbnailUrl,
+            AddTo = addTo,
+            RemoveFrom = removeFrom,
+            CreatedAtUtc = DateTime.UtcNow,
+        };
+        _songMoves.Add(move);
+        _log.Add("SongAssign(local)", $"video={req.VideoId} add={addTo.Count} remove={removeFrom.Count} id={move.Id}");
+        return ToDto(move);
+    }
+
+    public List<PendingSongMoveDto> GetPendingSongMoves() =>
+        _songMoves.LoadForUser(CurrentUserKey()).Select(ToDto).ToList();
+
+    /// <summary>Sube a YouTube la reasignación: inserta en AddTo y borra de RemoveFrom (parcial/reanudable).</summary>
+    public async Task<SongMoveUploadResultDto> UploadSongMoveAsync(string id, CancellationToken ct = default)
+    {
+        var userKey = CurrentUserKey();
+        var move = _songMoves.Get(id) ?? throw new ArgumentException("El cambio no existe (quizás ya se subió).");
+        if (move.UserKey != userKey) throw new NotAuthenticatedException("Ese cambio es de otra cuenta.");
+
+        var yt = BuildClient();
+        int added = 0, removed = 0, failed = 0;
+        bool paused = false;
+        var addRem = new List<SongMoveTarget>();
+        var remRem = new List<SongMoveRemoval>();
+        var realIdByLocal = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var t in move.AddTo)
+        {
+            if (paused) { addRem.Add(t); continue; }
+            try
+            {
+                var inserted = await yt.PlaylistItems.Insert(new PlaylistItem
+                {
+                    Snippet = new PlaylistItemSnippet { PlaylistId = t.PlaylistId, ResourceId = new ResourceId { Kind = "youtube#video", VideoId = move.VideoId } },
+                }, "snippet").ExecuteAsync(ct);
+                realIdByLocal[t.LocalItemId] = inserted.Id;
+                added++;
+            }
+            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { paused = true; addRem.Add(t); }
+            catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo agregar {Video} a {Pl}.", move.VideoId, t.PlaylistId); failed++; }
+        }
+        foreach (var r in move.RemoveFrom)
+        {
+            if (paused) { remRem.Add(r); continue; }
+            try
+            {
+                await yt.PlaylistItems.Delete(r.PlaylistItemId).ExecuteAsync(ct);
+                removed++;
+            }
+            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { paused = true; remRem.Add(r); }
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) { removed++; }
+            catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo quitar {Item} de {Pl}.", r.PlaylistItemId, r.PlaylistId); failed++; }
+        }
+
+        // Sincronizar ids reales en la caché de las playlists donde se agregó.
+        foreach (var t in move.AddTo)
+        {
+            if (!realIdByLocal.TryGetValue(t.LocalItemId, out var realId)) continue;
+            var items = _itemsCache.Load(userKey, t.PlaylistId);
+            if (items is null) continue;
+            _itemsCache.Save(userKey, t.PlaylistId,
+                items.Select(i => i.PlaylistItemId == t.LocalItemId ? i with { PlaylistItemId = realId } : i).ToList());
+        }
+
+        int remainingOps = addRem.Count + remRem.Count;
+        if (remainingOps == 0) _songMoves.Remove(id);
+        else { move.AddTo = addRem; move.RemoveFrom = remRem; _songMoves.Replace(move); }
+
+        _log.Add("SongAssign(upload)", $"id={id} video={move.VideoId} added={added} removed={removed} failed={failed} paused={paused} rem={remainingOps}");
+        return new SongMoveUploadResultDto(id, move.VideoId, added, removed, failed, paused, remainingOps);
+    }
+
+    /// <summary>Descarta la reasignación y revierte el cambio local.</summary>
+    public void DiscardSongMove(string id)
+    {
+        var userKey = CurrentUserKey();
+        var move = _songMoves.Get(id);
+        if (move is null) return;
+        if (move.UserKey != userKey) throw new NotAuthenticatedException("Ese cambio es de otra cuenta.");
+
+        foreach (var t in move.AddTo)
+        {
+            var items = _itemsCache.Load(userKey, t.PlaylistId);
+            if (items is null) continue;
+            _itemsCache.Save(userKey, t.PlaylistId, items.Where(i => i.PlaylistItemId != t.LocalItemId).ToList());
+        }
+        foreach (var r in move.RemoveFrom)
+        {
+            var items = _itemsCache.Load(userKey, r.PlaylistId) ?? new List<PlaylistItemDto>();
+            if (items.Any(i => i.PlaylistItemId == r.PlaylistItemId)) continue;
+            int pos = items.Count == 0 ? 0 : items.Max(i => i.Position) + 1;
+            _itemsCache.Save(userKey, r.PlaylistId,
+                items.Append(new PlaylistItemDto(r.PlaylistItemId, move.VideoId, move.Title, move.ChannelTitle, pos, move.ThumbnailUrl)).ToList());
+        }
+        _songMoves.Remove(id);
+        _log.Add("SongAssign(discard)", $"id={id} video={move.VideoId}");
+    }
+
+    /// <summary>Playlists (ids) donde está actualmente la canción (solo caché, 0 cuota).</summary>
+    public List<string> GetSongLocations(string videoId) =>
+        CurrentSongLocations(CurrentUserKey(), videoId).Keys.ToList();
+
+    /// <summary>Encola (staged) quitar varias canciones de UNA playlist. Devuelve cuántas encoló.</summary>
+    public int StageRemoveFromPlaylist(string playlistId, List<string> videoIds)
+    {
+        if (string.IsNullOrEmpty(playlistId) || videoIds is null || videoIds.Count == 0) return 0;
+        var userKey = CurrentUserKey();
+        var cache = _cacheStore.Load();
+        var title = cache?.Playlists?.FirstOrDefault(p => p.Id == playlistId)?.Title ?? playlistId;
+        var items = _itemsCache.Load(userKey, playlistId);
+        if (items is null) return 0;
+
+        var removedItemIds = new HashSet<string>(StringComparer.Ordinal);
+        int staged = 0;
+        foreach (var vid in videoIds.Distinct())
+        {
+            var hit = items.FirstOrDefault(i => i.VideoId == vid);
+            if (hit is null) continue;
+            _songMoves.Add(new PendingSongMove
+            {
+                Id = Guid.NewGuid().ToString("N")[..12],
+                UserKey = userKey,
+                VideoId = vid,
+                Title = hit.Title,
+                ChannelTitle = hit.ChannelTitle,
+                ThumbnailUrl = hit.ThumbnailUrl,
+                AddTo = [],
+                RemoveFrom = [new SongMoveRemoval { PlaylistId = playlistId, PlaylistTitle = title, PlaylistItemId = hit.PlaylistItemId }],
+                CreatedAtUtc = DateTime.UtcNow,
+            });
+            removedItemIds.Add(hit.PlaylistItemId);
+            staged++;
+        }
+        if (removedItemIds.Count > 0)
+            _itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());
+
+        _log.Add("RemoveFromList(local)", $"playlist={playlistId} staged={staged}");
+        return staged;
     }
 
     public async Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default)

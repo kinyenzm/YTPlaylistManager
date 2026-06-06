@@ -147,6 +147,39 @@ public record UploadResultDto(
     int RemainingSources = 0 // listas origen que faltan borrar (si se cortó)
 );
 
+// ── Asignar una canción a varias/una playlist (staged) ──
+
+public record AssignSongRequest(
+    string VideoId,
+    string Title,
+    string? ChannelTitle,
+    string? ThumbnailUrl,
+    List<string> DesiredPlaylistIds   // playlists donde debe quedar la canción
+);
+
+public record PendingSongMoveDto(
+    string Id,
+    string VideoId,
+    string Title,
+    string? ThumbnailUrl,
+    List<string> AddTo,           // títulos de listas donde se va a agregar
+    List<string> RemoveFrom,      // títulos de listas de donde se va a quitar
+    int EstimatedQuotaUnits,
+    DateTime CreatedAtUtc
+);
+
+public record SongMoveUploadResultDto(
+    string Id,
+    string VideoId,
+    int Added,
+    int Removed,
+    int Failed,
+    bool Paused,
+    int RemainingOps
+);
+
+public record RemoveFromPlaylistRequest(string PlaylistId, List<string> VideoIds);
+
 public record MergeReviewSummaryDto(
     string Id,
     string TargetPlaylistId,
@@ -265,34 +298,3 @@ public record CacheStatusDto(
     int ArchivedPlaylistsCount
 );
 
-// ── Pre-análisis de merge ──
-
-public record DuplicateAnalysisDto(
-    int PlaylistCount,
-    List<PlaylistDuplicateAnalysisDto> PlaylistAnalysis,
-    int EstimatedQuotaCost,
-    int TotalDuplicatesExact,
-    int TotalDuplicatesFuzzy,
-    int TotalUniqueItems,
-    List<MergePreviewItemDto>? Preview = null,
-    int PreviewTotalNew = 0,
-    bool PreviewTruncated = false
-);
-
-public record MergePreviewItemDto(
-    string VideoId,
-    string Title,
-    string? ChannelTitle,
-    string SourcePlaylistId,
-    string SourcePlaylistTitle,
-    string Status
-);
-
-public record PlaylistDuplicateAnalysisDto(
-    string PlaylistId,
-    string PlaylistTitle,
-    int ItemCount,
-    int DuplicatesByVideoId,
-    int DuplicatesByTitle,
-    int UniqueItems
-);

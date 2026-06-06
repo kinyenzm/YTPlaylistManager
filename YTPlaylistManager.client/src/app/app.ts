@@ -2,6 +2,7 @@ import {
   Component,
   ChangeDetectionStrategy,
   signal,
+  computed,
   inject,
   OnInit,
 } from '@angular/core';
@@ -38,9 +39,9 @@ function detectInitialLang(): Lang {
       <div class="row">
         <app-lang-switcher />
         @if (status()?.isAuthenticated) {
-          <a routerLink="/buscar">{{ 'app.nav.search' | translate }}</a>
-          <a routerLink="/repetidas">{{ 'app.nav.cross_dups' | translate }}</a>
-          <a routerLink="/cache">{{ 'app.nav.cache' | translate }}</a>
+          <a [routerLink]="navPaths().search">{{ 'app.nav.search' | translate }}</a>
+          <a [routerLink]="navPaths().cross">{{ 'app.nav.cross_dups' | translate }}</a>
+          <a [routerLink]="navPaths().cache">{{ 'app.nav.cache' | translate }}</a>
           <span class="muted">{{ 'app.nav.connected' | translate }}</span>
           <button class="secondary" (click)="logout()">{{ 'app.nav.logout' | translate }}</button>
         } @else {
@@ -60,12 +61,29 @@ export class App implements OnInit {
   protected readonly status = signal<AuthStatus | null>(null);
   protected readonly loginUrl = this.api.loginUrl();
 
+  // Idioma actual → rutas en es/en (ambas resuelven; ver app.routes.ts).
+  protected readonly lang = signal<string>(detectInitialLang());
+  protected readonly navPaths = computed(() => {
+    const es = this.lang().startsWith('es');
+    return {
+      search: es ? '/buscar' : '/search',
+      cross: es ? '/organizar' : '/organize',
+      cache: es ? '/datos' : '/data',
+    };
+  });
+
   ngOnInit(): void {
     const lang = detectInitialLang();
     this.translate.use(lang);
     if (typeof document !== 'undefined') {
       document.documentElement.lang = lang;
     }
+    this.translate.onLangChange.subscribe((e) => {
+      this.lang.set(e.lang);
+      if (typeof document !== 'undefined') {
+        document.documentElement.lang = e.lang;
+      }
+    });
 
     this.api.authStatus().subscribe({
       next: (s) => this.status.set(s),

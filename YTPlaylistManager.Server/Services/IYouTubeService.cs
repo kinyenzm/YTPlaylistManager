@@ -14,6 +14,12 @@ public interface IYouTubeService
     List<PendingUploadDto> GetPendingUploads();
     Task<UploadResultDto> UploadPendingAsync(string id, CancellationToken ct = default);
     void DiscardPending(string id);
+    PendingSongMoveDto? StageSongAssignment(AssignSongRequest req);
+    List<string> GetSongLocations(string videoId);
+    int StageRemoveFromPlaylist(string playlistId, List<string> videoIds);
+    List<PendingSongMoveDto> GetPendingSongMoves();
+    Task<SongMoveUploadResultDto> UploadSongMoveAsync(string id, CancellationToken ct = default);
+    void DiscardSongMove(string id);
     Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default);
     Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default);
 }

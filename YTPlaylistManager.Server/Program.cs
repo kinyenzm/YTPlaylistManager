@@ -16,6 +16,7 @@ builder.Services.AddSingleton<GoogleTokenStore>();
 builder.Services.AddSingleton<OperationLog>();
 builder.Services.AddSingleton<MergeReviewStore>();
 builder.Services.AddSingleton<PendingUploadStore>();
+builder.Services.AddSingleton<PendingSongMoveStore>();
 builder.Services.AddSingleton<ArchivedPlaylistsStore>();
 builder.Services.AddSingleton<PlaylistCacheStore>();
 builder.Services.AddSingleton<PlaylistItemsCacheStore>();
