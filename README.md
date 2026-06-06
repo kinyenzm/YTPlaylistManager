@@ -122,8 +122,13 @@ Abre `http://localhost:4200`. El `proxy.conf.js` redirige `/api` → `http://loc
    - La unión se aplica **en local** (0 cuota) y queda **pendiente de subir**; aparece un banner. Las listas origen quedan **🕒 en cola** (marcadas y bloqueadas). Si las listas ya están contenidas en la destino, se unen igual para **borrar las repetidas**.
    - **Subir a YouTube**: inserta las canciones en la lista destino y **borra las listas origen** de tu cuenta. Es **parcial y reanudable**: si se agota la cuota diaria, continúa al día siguiente desde donde quedó.
    - **Descartar** revierte la unión local sin tocar YouTube.
-4. **Ordenar con IA** (dentro de una lista): por *género / ánimo / década*.
-5. **Idioma**: selector **ES / EN** arriba (autodetecta el del navegador). Casi todo funciona **offline** desde la cache (0 cuota); solo *Actualizar todo* y *Subir a YouTube* usan la API.
+4. **Organizar canciones** (menú *Organizar*, ruta `/organizar`), también **local-first**. Tres modos:
+   - **Repetidas**: las canciones que están en 2+ listas.
+   - **Por lista**: elegís una lista y ves todas sus canciones; podés seleccionar varias y **quitarlas** de esa lista de una.
+   - **Por canción**: buscás por nombre o ID.
+   - En cualquier modo, por canción abrís un selector con **todas tus listas** (marcadas donde está ahora) y elegís dónde debe quedar — **en varias o en una sola**. Se agrega a las nuevas y se quita de las desmarcadas. Todo queda **pendiente de subir** y se sube/parcial igual que las uniones.
+5. **Ordenar con IA** (dentro de una lista): por *género / ánimo / década*.
+6. **Idioma**: selector **ES / EN** arriba (autodetecta el del navegador). Las rutas existen en ambos idiomas (`/organizar` ↔ `/organize`, `/buscar` ↔ `/search`, `/datos` ↔ `/data`, `/listas/:id` ↔ `/playlists/:id`). Casi todo funciona **offline** desde la cache (0 cuota); solo *Actualizar todo* y *Subir a YouTube* usan la API.
 
 ---
 
@@ -147,7 +152,14 @@ Abre `http://localhost:4200`. El `proxy.conf.js` redirige `/api` → `http://loc
 | DELETE | `/api/playlists/pending-uploads/{id}` | Descarta y revierte la unión local |
 | POST   | `/api/playlists/refresh-all` | Relee todas las listas desde YouTube |
 | POST   | `/api/playlists/{id}/classify` | Ordena con IA |
-| GET/POST | `/api/songs/*`, `/api/cache/*`, `/api/analysis/*` | Buscar canciones, explorar cache, análisis previo |
+| POST   | `/api/songs/search` | Busca canciones (videoId/nombre, en cache) |
+| GET    | `/api/songs/{videoId}/locations` | Listas donde está la canción (cache, 0 cuota) |
+| POST   | `/api/songs/assign` | Asigna la canción a un set de listas (agrega/quita) → pendiente |
+| POST   | `/api/songs/remove-from-playlist` | Quita varias canciones de una lista → pendiente |
+| GET    | `/api/songs/pending-moves` | Reasignaciones de canciones pendientes de subir |
+| POST   | `/api/songs/pending-moves/{id}/upload` | Sube a YouTube la reasignación (parcial/reanudable) |
+| DELETE | `/api/songs/pending-moves/{id}` | Descarta y revierte la reasignación local |
+| GET/POST | `/api/cache/*` | Explorar la cache local |
 | GET    | `/api/operations` | Log de operaciones realizadas |
 
 Los errores se manejan de forma central en `GlobalExceptionMiddleware`: `401` sin sesión Google, `400` petición inválida, `502` fallo de servicio externo, `500` resto.
