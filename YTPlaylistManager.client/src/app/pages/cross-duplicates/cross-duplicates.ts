@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, signal, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -33,6 +33,27 @@ export class CrossDuplicates {
   protected readonly error = signal<string | null>(null);
   protected readonly allPlaylists = signal<Playlist[]>([]);
 
+  // id → título (para mostrar "en qué listas está")
+  protected readonly titleById = computed<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const p of this.allPlaylists()) m[p.id] = p.title;
+    return m;
+  });
+  // videoId → ids de listas (modo "por lista", cargado en lote)
+  protected readonly locMap = signal<Record<string, string[]>>({});
+
+  thumb(videoId: string): string {
+    return `https://i.ytimg.com/vi/${videoId}/default.jpg`;
+  }
+  listsFor(videoId: string): string[] {
+    const t = this.titleById();
+    return (this.locMap()[videoId] ?? []).map((id) => t[id] ?? id);
+  }
+  titlesOf(ids: string[]): string[] {
+    const t = this.titleById();
+    return ids.map((id) => t[id] ?? id);
+  }
+
   // Modo "repetidas"
   protected readonly report = signal<CrossDuplicateReport | null>(null);
 
@@ -52,6 +73,8 @@ export class CrossDuplicates {
   protected readonly singleMode = signal(false);
   protected readonly applying = signal(false);
   protected readonly editorLoading = signal(false);
+  // Listas ordenadas para el modal: primero donde ya está, luego el resto (alfabético).
+  protected readonly editorPlaylists = signal<Playlist[]>([]);
 
   // Cambios staged
   protected readonly pendingMoves = signal<PendingSongMove[]>([]);
@@ -121,6 +144,13 @@ export class CrossDuplicates {
       next: (items) => {
         this.listItems.set(items);
         this.loading.set(false);
+        const ids = items.map((i) => i.videoId).filter(Boolean);
+        if (ids.length) {
+          this.api.songLocationsBatch(ids).subscribe({
+            next: (m) => this.locMap.set(m),
+            error: (e) => console.error(e),
+          });
+        }
       },
       error: (e) => {
         this.error.set(this.translate.instant('cross.error_scan'));
@@ -183,11 +213,19 @@ export class CrossDuplicates {
     this.editorLoading.set(true);
     this.api.songLocations(row.videoId).subscribe({
       next: (locs) => {
-        this.selection.set(new Set(locs));
+        const sel = new Set(locs);
+        this.selection.set(sel);
+        // Primero las listas donde ya está; el resto alfabético (orden del backend).
+        this.editorPlaylists.set(
+          [...this.allPlaylists()].sort(
+            (a, b) => (sel.has(b.id) ? 1 : 0) - (sel.has(a.id) ? 1 : 0),
+          ),
+        );
         this.editorLoading.set(false);
       },
       error: (e) => {
         this.selection.set(new Set());
+        this.editorPlaylists.set([...this.allPlaylists()]);
         this.editorLoading.set(false);
         console.error(e);
       },

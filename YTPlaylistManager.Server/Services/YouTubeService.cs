@@ -932,6 +932,35 @@ public class YouTubeService : IYouTubeService
     public List<string> GetSongLocations(string videoId) =>
         CurrentSongLocations(CurrentUserKey(), videoId).Keys.ToList();
 
+    /// <summary>Para un set de videoIds, las listas (ids) donde está cada uno (caché, 0 cuota).</summary>
+    public Dictionary<string, List<string>> GetSongLocationsBatch(List<string> videoIds)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var want = new HashSet<string>(videoIds ?? [], StringComparer.Ordinal);
+        if (want.Count == 0) return result;
+
+        var userKey = CurrentUserKey();
+        var cache = _cacheStore.Load();
+        if (cache?.Playlists is null) return result;
+
+        foreach (var pl in cache.Playlists)
+        {
+            var items = _itemsCache.Load(userKey, pl.Id);
+            if (items is null) continue;
+            foreach (var it in items)
+            {
+                if (string.IsNullOrEmpty(it.VideoId) || !want.Contains(it.VideoId)) continue;
+                if (!result.TryGetValue(it.VideoId, out var list))
+                {
+                    list = [];
+                    result[it.VideoId] = list;
+                }
+                if (!list.Contains(pl.Id)) list.Add(pl.Id);
+            }
+        }
+        return result;
+    }
+
     /// <summary>Encola (staged) quitar varias canciones de UNA playlist. Devuelve cuántas encoló.</summary>
     public int StageRemoveFromPlaylist(string playlistId, List<string> videoIds)
     {

@@ -70,19 +70,19 @@
     }
     @for (g of rep.groups; track g.videoId) {
       <div class="card">
-        <div class="row">
-          <a [href]="'https://www.youtube.com/watch?v=' + g.videoId" target="_blank" rel="noopener">{{ g.title }}</a>
-          <span class="tag">{{ 'cross.in_count' | translate:{ count: g.playlistCount } }}</span>
+        <div class="row" style="align-items:flex-start;gap:8px">
+          <img [src]="thumb(g.videoId)" class="thumb" alt="" />
+          <div style="flex:1">
+            <a [href]="'https://www.youtube.com/watch?v=' + g.videoId" target="_blank" rel="noopener">{{ g.title }}</a>
+            <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+              <span class="muted">{{ 'cross.appears_in' | translate }}</span>
+              @for (p of g.playlists; track p.playlistId) { <span class="tag">{{ p.playlistTitle }}</span> }
+            </div>
+          </div>
+          <button class="secondary" (click)="openEditor({ videoId: g.videoId, title: g.title })">
+            {{ 'cross.assign_open' | translate }}
+          </button>
         </div>
-        <div class="muted" style="margin-top:6px">{{ 'cross.appears_in' | translate }}</div>
-        <ul style="margin:4px 0 0; padding-left:18px">
-          @for (p of g.playlists; track p.playlistId) {
-            <li><a [routerLink]="['/playlists', p.playlistId]">{{ p.playlistTitle }}</a></li>
-          }
-        </ul>
-        <button class="secondary" style="margin-top:8px" (click)="openEditor({ videoId: g.videoId, title: g.title })">
-          {{ 'cross.assign_open' | translate }}
-        </button>
       </div>
     }
   }
@@ -113,10 +113,16 @@
       <div class="card">
         <div class="row" style="align-items:flex-start;gap:8px">
           <input type="checkbox" [checked]="bulkSelected().has(it.videoId)" (change)="toggleBulk(it.videoId)" />
-          @if (it.thumbnailUrl) { <img [src]="it.thumbnailUrl" class="thumb" alt="" /> }
+          <img [src]="it.thumbnailUrl || thumb(it.videoId)" class="thumb" alt="" />
           <div style="flex:1">
             <div>{{ it.title }}</div>
             <div class="muted">{{ it.channelTitle }}</div>
+            @if (listsFor(it.videoId).length) {
+              <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+                <span class="muted">{{ 'cross.appears_in' | translate }}</span>
+                @for (t of listsFor(it.videoId); track t) { <span class="tag">{{ t }}</span> }
+              </div>
+            }
           </div>
           <button class="secondary" (click)="openEditor({ videoId: it.videoId, title: it.title })">
             {{ 'cross.assign_open' | translate }}
@@ -142,9 +148,14 @@
     @for (r of results(); track r.videoId + r.originalPlaylistId) {
       <div class="card">
         <div class="row" style="align-items:flex-start;gap:8px">
+          <img [src]="thumb(r.videoId)" class="thumb" alt="" />
           <div style="flex:1">
             <div>{{ r.title }}</div>
-            <div class="muted">{{ r.channelTitle }} · {{ 'cross.in_count' | translate:{ count: r.appearsInCount } }}</div>
+            <div class="muted">{{ r.channelTitle }}</div>
+            <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+              <span class="muted">{{ 'cross.appears_in' | translate }}</span>
+              @for (t of titlesOf(r.appearsInPlaylistIds); track t) { <span class="tag">{{ t }}</span> }
+            </div>
           </div>
           <button class="secondary" (click)="openEditor({ videoId: r.videoId, title: r.title })">
             {{ 'cross.assign_open' | translate }}
@@ -170,10 +181,11 @@
           <button [class.secondary]="!singleMode()" (click)="setSingle(true)">{{ 'cross.mode_single' | translate }}</button>
         </div>
         <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:6px">
-          @for (pl of allPlaylists(); track pl.id) {
+          @for (pl of editorPlaylists(); track pl.id) {
             <label class="row" style="gap:8px;margin:2px 0;cursor:pointer">
               <input type="checkbox" [checked]="isChecked(pl.id)" (change)="toggle(pl.id)" />
               <span style="flex:1">{{ pl.title }}</span>
+              @if (isChecked(pl.id)) { <span class="tag" style="background:var(--accent2);color:#fff">✓</span> }
               <span class="muted">{{ pl.itemCount }}</span>
             </label>
           }

@@ -68,6 +68,12 @@ public class SongsController : ControllerBase
     public IActionResult Locations(string videoId)
         => Ok(_youtube.GetSongLocations(videoId));
 
+    /// <summary>Ubicaciones de varias canciones a la vez (videoId → ids de listas).</summary>
+    [HttpPost("locations")]
+    [RequireGoogleSession]
+    public IActionResult LocationsBatch([FromBody] List<string> videoIds)
+        => Ok(_youtube.GetSongLocationsBatch(videoIds));
+
     /// <summary>Encola quitar varias canciones de una playlist (staged).</summary>
     [HttpPost("remove-from-playlist")]
     [RequireGoogleSession]
