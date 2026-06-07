@@ -26,8 +26,8 @@ export const routes: Routes = [
   { path: 'organizar', loadComponent: crossDuplicates },
   { path: 'organize', loadComponent: crossDuplicates },
   // alias viejos
-  { path: 'repetidas', redirectTo: 'organizar' },
-  { path: 'duplicates', redirectTo: 'organize' },
+  { path: 'repetidas', redirectTo: 'organizar', pathMatch: 'full' },
+  { path: 'duplicates', redirectTo: 'organize', pathMatch: 'full' },
 
   // Buscar canción / search
   { path: 'buscar', loadComponent: songSearch },
