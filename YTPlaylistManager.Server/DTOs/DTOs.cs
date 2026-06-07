@@ -178,7 +178,19 @@ public record SongMoveUploadResultDto(
     int RemainingOps
 );
 
+public record SongMoveBulkResultDto(
+    int Moves,            // cuántos cambios había en la cola
+    int Completed,        // cuántos se subieron del todo
+    int Added,
+    int Removed,
+    int Failed,
+    bool Paused,          // se cortó por límite diario
+    int RemainingMoves    // cuántos quedan en la cola
+);
+
 public record RemoveFromPlaylistRequest(string PlaylistId, List<string> VideoIds);
+
+public record QuotaDto(int Used, int Limit, int Remaining, string Date);
 
 public record MergeReviewSummaryDto(
     string Id,

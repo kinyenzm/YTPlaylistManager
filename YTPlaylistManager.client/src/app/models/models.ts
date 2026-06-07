@@ -155,6 +155,23 @@ export interface SongMoveUploadResult {
   remainingOps: number;
 }
 
+export interface SongMoveBulkResult {
+  moves: number;
+  completed: number;
+  added: number;
+  removed: number;
+  failed: number;
+  paused: boolean;
+  remainingMoves: number;
+}
+
+export interface Quota {
+  used: number;
+  limit: number;
+  remaining: number;
+  date: string;
+}
+
 // ── Búsqueda bidireccional ──
 
 export interface SongSearchQuery {

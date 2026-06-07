@@ -1,9 +1,9 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   Playlist, PlaylistItem, DuplicateReport, MergeRequest, MergeResult, MergePreview,
-  PendingUpload, UploadResult, PendingSongMove, SongMoveUploadResult,
+  PendingUpload, UploadResult, PendingSongMove, SongMoveUploadResult, SongMoveBulkResult, Quota,
   ClassifyResult, AuthStatus, CrossDuplicateReport,
   SongSearchQuery, SongSearchResult, CacheStatus, SongMovementLog,
   PlaylistArchivedInfo, MergeReviewSummary
@@ -83,8 +83,22 @@ export class ApiService {
   uploadSongMove(id: string): Observable<SongMoveUploadResult> {
     return this.http.post<SongMoveUploadResult>(`${this.base}/songs/pending-moves/${id}/upload`, {});
   }
+  uploadAllSongMoves(): Observable<SongMoveBulkResult> {
+    return this.http.post<SongMoveBulkResult>(`${this.base}/songs/pending-moves/upload-all`, {});
+  }
   discardSongMove(id: string): Observable<unknown> {
     return this.http.delete(`${this.base}/songs/pending-moves/${id}`);
+  }
+  discardAllSongMoves(): Observable<unknown> {
+    return this.http.delete(`${this.base}/songs/pending-moves`);
+  }
+  getQuota(): Observable<Quota> {
+    return this.http.get<Quota>(`${this.base}/quota`);
+  }
+  // Cuota compartida (la lee el navbar); refrescar tras cada operación con costo.
+  readonly quota = signal<Quota | null>(null);
+  refreshQuota(): void {
+    this.getQuota().subscribe({ next: (q) => this.quota.set(q), error: () => {} });
   }
   songLocations(videoId: string): Observable<string[]> {
     return this.http.get<string[]>(`${this.base}/songs/${videoId}/locations`);

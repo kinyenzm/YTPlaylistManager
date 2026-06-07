@@ -8,7 +8,8 @@
       "merge": "Merge wizard",
       "connected": "Connected",
       "logout": "Log out",
-      "login": "Connect with Google"
+      "login": "Connect with Google",
+      "quota_title": "YouTube quota remaining today (resets daily)"
     },
     "lang": {
       "label": "Language",
@@ -166,7 +167,11 @@
     "move_paused": "Stopped at the daily limit; {{rem}} left. Hit Upload again when it resets.",
     "assign_upload_confirm": "This will apply on YouTube: add and/or remove this song from the chosen playlists. Continue?",
     "assign_upload_error": "Could not upload the change.",
-    "assign_discard_confirm": "Discard this change? It reverts locally (YouTube untouched)."
+    "assign_discard_confirm": "Discard this change? It reverts locally (YouTube untouched).",
+    "upload_all": "⬆ Upload all",
+    "discard_all": "Discard all",
+    "upload_all_confirm": "You're about to upload ALL {{n}} reassignments to YouTube (add/remove). This is permanent. Continue?",
+    "discard_all_confirm": "Discard all {{n}} pending reassignments? They revert locally."
   },
   "search": {
     "title": "Search Songs",

@@ -21,7 +21,9 @@ public interface IYouTubeService
     int StageRemoveFromPlaylist(string playlistId, List<string> videoIds);
     List<PendingSongMoveDto> GetPendingSongMoves();
     Task<SongMoveUploadResultDto> UploadSongMoveAsync(string id, CancellationToken ct = default);
+    Task<SongMoveBulkResultDto> UploadAllSongMovesAsync(CancellationToken ct = default);
     void DiscardSongMove(string id);
+    void DiscardAllSongMoves();
     Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default);
     Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default);
 }

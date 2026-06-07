@@ -14,7 +14,19 @@
 
 @if (pendingMoves().length > 0) {
   <div class="card" style="border-color:var(--accent2);margin-top:12px">
-    <strong>⬆ {{ 'cross.pending_title' | translate:{ count: pendingMoves().length } }}</strong>
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <strong>⬆ {{ 'cross.pending_title' | translate:{ count: pendingMoves().length } }}</strong>
+      @if (pendingMoves().length > 1) {
+        <div class="row" style="gap:6px">
+          <button (click)="uploadAll()" [disabled]="uploadingId() !== null">
+            {{ (uploadingId() === 'ALL' ? 'cross.uploading' : 'cross.upload_all') | translate }}
+          </button>
+          <button class="secondary" (click)="discardAll()" [disabled]="uploadingId() !== null">
+            {{ 'cross.discard_all' | translate }}
+          </button>
+        </div>
+      }
+    </div>
     @if (moveResult(); as mr) {
       <div class="muted" style="margin-top:4px">
         ✓ {{ 'cross.move_done' | translate:{ added: mr.added, removed: mr.removed } }}

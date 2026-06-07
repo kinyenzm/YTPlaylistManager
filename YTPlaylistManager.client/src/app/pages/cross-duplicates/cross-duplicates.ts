@@ -319,6 +319,7 @@ export class CrossDuplicates {
       next: (r) => {
         this.moveResult.set(r);
         this.uploadingId.set(null);
+        this.api.refreshQuota();
         this.loadPending();
         this.refreshCurrentMode();
       },
@@ -337,6 +338,41 @@ export class CrossDuplicates {
   discardMove(id: string): void {
     if (!confirm(this.translate.instant('cross.assign_discard_confirm'))) return;
     this.api.discardSongMove(id).subscribe({
+      next: () => {
+        this.loadPending();
+        this.refreshCurrentMode();
+      },
+      error: (e) => console.error(e),
+    });
+  }
+
+  uploadAll(): void {
+    if (!confirm(this.translate.instant('cross.upload_all_confirm', { n: this.pendingMoves().length }))) return;
+    this.uploadingId.set('ALL');
+    this.moveResult.set(null);
+    this.error.set(null);
+    this.api.uploadAllSongMoves().subscribe({
+      next: () => {
+        this.uploadingId.set(null);
+        this.api.refreshQuota();
+        this.loadPending();
+        this.refreshCurrentMode();
+      },
+      error: (e) => {
+        this.error.set(
+          e?.status === 403
+            ? this.translate.instant('common.youtube_quota_exhausted')
+            : this.translate.instant('cross.assign_upload_error'),
+        );
+        this.uploadingId.set(null);
+        console.error(e);
+      },
+    });
+  }
+
+  discardAll(): void {
+    if (!confirm(this.translate.instant('cross.discard_all_confirm', { n: this.pendingMoves().length }))) return;
+    this.api.discardAllSongMoves().subscribe({
       next: () => {
         this.loadPending();
         this.refreshCurrentMode();

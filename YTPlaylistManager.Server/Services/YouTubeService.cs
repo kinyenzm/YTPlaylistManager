@@ -24,6 +24,7 @@ public class YouTubeService : IYouTubeService
     private readonly MergeReviewStore _reviewStore;
     private readonly PendingUploadStore _pendingUploads;
     private readonly PendingSongMoveStore _songMoves;
+    private readonly QuotaTracker _quota;
     private readonly ApiKeyPool _apiKeyPool;
     private readonly ILogger<YouTubeService> _logger;
 
@@ -37,6 +38,7 @@ public class YouTubeService : IYouTubeService
         MergeReviewStore reviewStore,
         PendingUploadStore pendingUploads,
         PendingSongMoveStore songMoves,
+        QuotaTracker quota,
         ApiKeyPool apiKeyPool,
         ILogger<YouTubeService> logger)
     {
@@ -49,6 +51,7 @@ public class YouTubeService : IYouTubeService
         _reviewStore = reviewStore;
         _pendingUploads = pendingUploads;
         _songMoves = songMoves;
+        _quota = quota;
         _apiKeyPool = apiKeyPool;
         _logger = logger;
     }
@@ -159,6 +162,7 @@ public class YouTubeService : IYouTubeService
                 req.MaxResults = 50;
                 req.PageToken = pageToken;
                 var resp = await req.ExecuteAsync(ct);
+                _quota.Add(1);
 
                 foreach (var p in resp.Items)
                 {
@@ -247,7 +251,7 @@ public class YouTubeService : IYouTubeService
         return await FetchItemsAsync(BuildClient(), playlistId, ct);
     }
 
-    private static async Task<List<PlaylistItemDto>> FetchItemsAsync(
+    private async Task<List<PlaylistItemDto>> FetchItemsAsync(
         Google.Apis.YouTube.v3.YouTubeService yt, string playlistId, CancellationToken ct)
     {
         var result = new List<PlaylistItemDto>();
@@ -260,6 +264,7 @@ public class YouTubeService : IYouTubeService
             req.MaxResults = 50;
             req.PageToken = pageToken;
             var resp = await req.ExecuteAsync(ct);
+            _quota.Add(1);
 
             foreach (var it in resp.Items)
             {
@@ -290,6 +295,7 @@ public class YouTubeService : IYouTubeService
         var playlistReq = yt.Playlists.List("snippet");
         playlistReq.Id = playlistId;
         var pResp = await playlistReq.ExecuteAsync(ct);
+        _quota.Add(1);
         var playlistTitle = pResp.Items.FirstOrDefault()?.Snippet.Title ?? playlistId;
 
         var items = await GetPlaylistItemsAsync(playlistId, ct);
@@ -622,6 +628,7 @@ public class YouTubeService : IYouTubeService
                         ResourceId = new ResourceId { Kind = "youtube#video", VideoId = item.VideoId },
                     },
                 }, "snippet").ExecuteAsync(ct);
+                _quota.Add(50);
                 realIdByLocal[item.LocalItemId] = inserted.Id;
                 uploaded++;
             }
@@ -668,6 +675,7 @@ public class YouTubeService : IYouTubeService
                 try
                 {
                     await yt.Playlists.Delete(s.Id).ExecuteAsync(ct);
+                    _quota.Add(50);
                     deletedIds.Add(s.Id);
                     _itemsCache.Invalidate(userKey, s.Id);
                 }
@@ -865,6 +873,7 @@ public class YouTubeService : IYouTubeService
                 {
                     Snippet = new PlaylistItemSnippet { PlaylistId = t.PlaylistId, ResourceId = new ResourceId { Kind = "youtube#video", VideoId = move.VideoId } },
                 }, "snippet").ExecuteAsync(ct);
+                _quota.Add(50);
                 realIdByLocal[t.LocalItemId] = inserted.Id;
                 added++;
             }
@@ -877,6 +886,7 @@ public class YouTubeService : IYouTubeService
             try
             {
                 await yt.PlaylistItems.Delete(r.PlaylistItemId).ExecuteAsync(ct);
+                _quota.Add(50);
                 removed++;
             }
             catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { paused = true; remRem.Add(r); }
@@ -935,6 +945,30 @@ public class YouTubeService : IYouTubeService
     /// <summary>Items de una lista SOLO desde caché (0 cuota, nunca toca YouTube). Vacío si no está cargada.</summary>
     public List<PlaylistItemDto> GetCachedItems(string playlistId) =>
         _itemsCache.Load(CurrentUserKey(), playlistId) ?? [];
+
+    /// <summary>Sube TODA la cola de reasignaciones (corta y conserva el resto si se agota la cuota).</summary>
+    public async Task<SongMoveBulkResultDto> UploadAllSongMovesAsync(CancellationToken ct = default)
+    {
+        var moves = _songMoves.LoadForUser(CurrentUserKey());
+        int added = 0, removed = 0, failed = 0, completed = 0;
+        bool paused = false;
+        foreach (var m in moves)
+        {
+            if (paused) break;
+            var r = await UploadSongMoveAsync(m.Id, ct);
+            added += r.Added; removed += r.Removed; failed += r.Failed;
+            if (r.Paused) paused = true; else completed++;
+        }
+        var remaining = _songMoves.LoadForUser(CurrentUserKey()).Count;
+        return new SongMoveBulkResultDto(moves.Count, completed, added, removed, failed, paused, remaining);
+    }
+
+    /// <summary>Descarta TODA la cola de reasignaciones y revierte los cambios locales.</summary>
+    public void DiscardAllSongMoves()
+    {
+        foreach (var m in _songMoves.LoadForUser(CurrentUserKey()))
+            DiscardSongMove(m.Id);
+    }
 
     /// <summary>Para un set de videoIds, las listas (ids) donde está cada uno (caché, 0 cuota).</summary>
     public Dictionary<string, List<string>> GetSongLocationsBatch(List<string> videoIds)

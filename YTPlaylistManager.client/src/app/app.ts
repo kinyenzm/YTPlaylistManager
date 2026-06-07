@@ -37,6 +37,13 @@ function detectInitialLang(): Lang {
     <header class="app-header">
       <h2 style="margin:0"><a routerLink="/">{{ 'app.title' | translate }}</a></h2>
       <div class="row">
+        @if (quota(); as q) {
+          <span class="tag" [title]="'app.nav.quota_title' | translate"
+                [style.background]="q.remaining < 500 ? 'var(--accent)' : 'var(--border)'"
+                [style.color]="q.remaining < 500 ? '#fff' : 'var(--text)'">
+            ⚡ {{ q.remaining }}/{{ q.limit }}
+          </span>
+        }
         <app-lang-switcher />
         @if (status()?.isAuthenticated) {
           <a [routerLink]="navPaths().search">{{ 'app.nav.search' | translate }}</a>
@@ -60,6 +67,7 @@ export class App implements OnInit {
 
   protected readonly status = signal<AuthStatus | null>(null);
   protected readonly loginUrl = this.api.loginUrl();
+  protected readonly quota = this.api.quota;   // cuota de YouTube restante hoy
 
   // Idioma actual → rutas en es/en (ambas resuelven; ver app.routes.ts).
   protected readonly lang = signal<string>(detectInitialLang());
@@ -89,6 +97,10 @@ export class App implements OnInit {
       next: (s) => this.status.set(s),
       error: () => this.status.set({ isAuthenticated: false, hasRefreshToken: false }),
     });
+
+    // Cuota: inicial + refresco periódico (también la refrescan las operaciones con costo).
+    this.api.refreshQuota();
+    setInterval(() => this.api.refreshQuota(), 10000);
   }
 
   logout(): void {

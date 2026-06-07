@@ -118,6 +118,7 @@ export class PlaylistsPage implements OnInit {
       next: (r) => {
         this.uploadResult.set(r);
         this.uploadingId.set(null);
+        this.api.refreshQuota();
         this.loadPendingUploads();
         this.load();
       },
@@ -256,6 +257,7 @@ export class PlaylistsPage implements OnInit {
       next: (r) => {
         this.refreshResult.set(r);
         this.refreshing.set(false);
+        this.api.refreshQuota();
         this.load();
       },
       error: (e) => {

@@ -92,11 +92,25 @@ public class SongsController : ControllerBase
     public async Task<IActionResult> UploadMove(string id, CancellationToken ct)
         => Ok(await _youtube.UploadSongMoveAsync(id, ct));
 
+    [HttpPost("pending-moves/upload-all")]
+    [RequireGoogleSession]
+    [ProducesResponseType<SongMoveBulkResultDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> UploadAllMoves(CancellationToken ct)
+        => Ok(await _youtube.UploadAllSongMovesAsync(ct));
+
     [HttpDelete("pending-moves/{id}")]
     [RequireGoogleSession]
     public IActionResult DiscardMove(string id)
     {
         _youtube.DiscardSongMove(id);
+        return NoContent();
+    }
+
+    [HttpDelete("pending-moves")]
+    [RequireGoogleSession]
+    public IActionResult DiscardAllMoves()
+    {
+        _youtube.DiscardAllSongMoves();
         return NoContent();
     }
 }

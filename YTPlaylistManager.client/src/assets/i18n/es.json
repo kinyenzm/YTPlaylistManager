@@ -8,7 +8,8 @@
       "merge": "Asistente para unir",
       "connected": "Conectado",
       "logout": "Salir",
-      "login": "Conectar con Google"
+      "login": "Conectar con Google",
+      "quota_title": "Cuota de YouTube restante hoy (se reinicia cada día)"
     },
     "lang": {
       "label": "Idioma",
@@ -166,7 +167,11 @@
     "move_paused": "Se cortó por el límite diario; faltan {{rem}}. Volvé a Subir cuando se renueve.",
     "assign_upload_confirm": "Vas a aplicar en YouTube: agregar y/o quitar esta canción de las listas elegidas. ¿Seguir?",
     "assign_upload_error": "No se pudo subir el cambio.",
-    "assign_discard_confirm": "¿Descartar este cambio? Se revierte en local (no toca YouTube)."
+    "assign_discard_confirm": "¿Descartar este cambio? Se revierte en local (no toca YouTube).",
+    "upload_all": "⬆ Subir todas",
+    "discard_all": "Descartar todas",
+    "upload_all_confirm": "Vas a subir TODAS las {{n}} reasignaciones a YouTube (agregar/quitar). Es permanente. ¿Seguir?",
+    "discard_all_confirm": "¿Descartar las {{n}} reasignaciones pendientes? Se revierten en local."
   },
   "search": {
     "title": "Buscar canciones",
