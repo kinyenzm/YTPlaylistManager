@@ -197,7 +197,7 @@
             <label class="row" style="gap:8px;margin:2px 0;cursor:pointer">
               <input type="checkbox" [checked]="isChecked(pl.id)" (change)="toggle(pl.id)" />
               <span style="flex:1">{{ pl.title }}</span>
-              @if (isChecked(pl.id)) { <span class="tag" style="background:var(--accent2);color:#fff">✓</span> }
+              @if (isChecked(pl.id)) { <span class="tag" style="background:var(--accent2);color:var(--ink)">✓</span> }
               <span class="muted">{{ pl.itemCount }}</span>
             </label>
           }
