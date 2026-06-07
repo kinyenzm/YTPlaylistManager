@@ -11,6 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
 import { AuthStatus } from './models/models';
 import { LangSwitcher } from './components/lang-switcher/lang-switcher';
+import { LiveActivity } from './components/live-activity/live-activity';
 
 const STORAGE_KEY = 'ytpm.lang';
 const SUPPORTED = ['es', 'en'] as const;
@@ -32,7 +33,7 @@ function detectInitialLang(): Lang {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher],
+  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher, LiveActivity],
   template: `
     <header class="app-header">
       <h2 style="margin:0"><a routerLink="/">{{ 'app.title' | translate }}</a></h2>
@@ -59,6 +60,7 @@ function detectInitialLang(): Lang {
     <main>
       <router-outlet />
     </main>
+    <app-live-activity />
   `,
 })
 export class App implements OnInit {

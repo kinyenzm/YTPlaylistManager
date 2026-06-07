@@ -17,6 +17,12 @@
       "en": "English"
     }
   },
+  "activity": {
+    "title": "YouTube activity",
+    "added": "Added «{{title}}» → {{playlist}}",
+    "removed": "Removed «{{title}}» from {{playlist}}",
+    "deleted_list": "Playlist deleted: «{{title}}»"
+  },
   "common": {
     "loading": "Loading…",
     "error_generic": "Something went wrong. Please try again.",

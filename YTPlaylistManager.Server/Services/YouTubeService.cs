@@ -25,6 +25,7 @@ public class YouTubeService : IYouTubeService
     private readonly PendingUploadStore _pendingUploads;
     private readonly PendingSongMoveStore _songMoves;
     private readonly QuotaTracker _quota;
+    private readonly ActivityBroadcaster _activity;
     private readonly ApiKeyPool _apiKeyPool;
     private readonly ILogger<YouTubeService> _logger;
 
@@ -39,6 +40,7 @@ public class YouTubeService : IYouTubeService
         PendingUploadStore pendingUploads,
         PendingSongMoveStore songMoves,
         QuotaTracker quota,
+        ActivityBroadcaster activity,
         ApiKeyPool apiKeyPool,
         ILogger<YouTubeService> logger)
     {
@@ -52,6 +54,7 @@ public class YouTubeService : IYouTubeService
         _pendingUploads = pendingUploads;
         _songMoves = songMoves;
         _quota = quota;
+        _activity = activity;
         _apiKeyPool = apiKeyPool;
         _logger = logger;
     }
@@ -629,6 +632,7 @@ public class YouTubeService : IYouTubeService
                     },
                 }, "snippet").ExecuteAsync(ct);
                 _quota.Add(50);
+                _activity.Publish(new ActivityEvent("insert", item.Title, plan.TargetPlaylistTitle, item.VideoId, DateTime.UtcNow));
                 realIdByLocal[item.LocalItemId] = inserted.Id;
                 uploaded++;
             }
@@ -676,6 +680,7 @@ public class YouTubeService : IYouTubeService
                 {
                     await yt.Playlists.Delete(s.Id).ExecuteAsync(ct);
                     _quota.Add(50);
+                    _activity.Publish(new ActivityEvent("delete-list", s.Title, "", "", DateTime.UtcNow));
                     deletedIds.Add(s.Id);
                     _itemsCache.Invalidate(userKey, s.Id);
                 }
@@ -874,6 +879,7 @@ public class YouTubeService : IYouTubeService
                     Snippet = new PlaylistItemSnippet { PlaylistId = t.PlaylistId, ResourceId = new ResourceId { Kind = "youtube#video", VideoId = move.VideoId } },
                 }, "snippet").ExecuteAsync(ct);
                 _quota.Add(50);
+                _activity.Publish(new ActivityEvent("insert", move.Title, t.PlaylistTitle, move.VideoId, DateTime.UtcNow));
                 realIdByLocal[t.LocalItemId] = inserted.Id;
                 added++;
             }
@@ -887,6 +893,7 @@ public class YouTubeService : IYouTubeService
             {
                 await yt.PlaylistItems.Delete(r.PlaylistItemId).ExecuteAsync(ct);
                 _quota.Add(50);
+                _activity.Publish(new ActivityEvent("delete", move.Title, r.PlaylistTitle, move.VideoId, DateTime.UtcNow));
                 removed++;
             }
             catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { paused = true; remRem.Add(r); }

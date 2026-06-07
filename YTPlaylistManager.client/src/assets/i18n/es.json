@@ -17,6 +17,12 @@
       "en": "Inglés"
     }
   },
+  "activity": {
+    "title": "Actividad en YouTube",
+    "added": "Agregada «{{title}}» → {{playlist}}",
+    "removed": "Quitada «{{title}}» de {{playlist}}",
+    "deleted_list": "Lista borrada: «{{title}}»"
+  },
   "common": {
     "loading": "Cargando…",
     "error_generic": "Algo salió mal. Probá de nuevo.",

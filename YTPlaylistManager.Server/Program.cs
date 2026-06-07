@@ -18,6 +18,7 @@ builder.Services.AddSingleton<MergeReviewStore>();
 builder.Services.AddSingleton<PendingUploadStore>();
 builder.Services.AddSingleton<PendingSongMoveStore>();
 builder.Services.AddSingleton<QuotaTracker>();
+builder.Services.AddSingleton<ActivityBroadcaster>();
 builder.Services.AddSingleton<ArchivedPlaylistsStore>();
 builder.Services.AddSingleton<PlaylistCacheStore>();
 builder.Services.AddSingleton<PlaylistItemsCacheStore>();
