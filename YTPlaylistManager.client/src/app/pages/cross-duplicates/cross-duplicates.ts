@@ -42,6 +42,21 @@ export class CrossDuplicates {
   // videoId → ids de listas (modo "por lista", cargado en lote)
   protected readonly locMap = signal<Record<string, string[]>>({});
 
+  // Ordenados: primero las canciones que están en más de una playlist.
+  protected readonly listItemsSorted = computed(() => {
+    const m = this.locMap();
+    return [...this.listItems()].sort(
+      (a, b) => (m[b.videoId]?.length ?? 0) - (m[a.videoId]?.length ?? 0),
+    );
+  });
+  protected readonly resultsSorted = computed(() =>
+    [...this.results()].sort((a, b) => (b.appearsInCount ?? 0) - (a.appearsInCount ?? 0)),
+  );
+  protected readonly groupsSorted = computed(() => {
+    const r = this.report();
+    return r ? [...r.groups].sort((a, b) => b.playlistCount - a.playlistCount) : [];
+  });
+
   thumb(videoId: string): string {
     return `https://i.ytimg.com/vi/${videoId}/default.jpg`;
   }

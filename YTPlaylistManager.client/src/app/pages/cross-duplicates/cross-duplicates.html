@@ -68,7 +68,7 @@
     @if (rep.totalGroups === 0) {
       <div class="card">{{ 'cross.empty' | translate }}</div>
     }
-    @for (g of rep.groups; track g.videoId) {
+    @for (g of groupsSorted(); track g.videoId) {
       <div class="card">
         <div class="row" style="align-items:flex-start;gap:8px">
           <img [src]="thumb(g.videoId)" class="thumb" alt="" />
@@ -109,7 +109,7 @@
         </div>
       </div>
     }
-    @for (it of listItems(); track it.playlistItemId) {
+    @for (it of listItemsSorted(); track it.playlistItemId) {
       <div class="card">
         <div class="row" style="align-items:flex-start;gap:8px">
           <input type="checkbox" [checked]="bulkSelected().has(it.videoId)" (change)="toggleBulk(it.videoId)" />
@@ -145,7 +145,7 @@
 
   @if (results().length > 0) {
     <p class="muted" style="margin-top:12px">{{ 'cross.results_count' | translate:{ n: results().length } }}</p>
-    @for (r of results(); track r.videoId + r.originalPlaylistId) {
+    @for (r of resultsSorted(); track r.videoId + r.originalPlaylistId) {
       <div class="card">
         <div class="row" style="align-items:flex-start;gap:8px">
           <img [src]="thumb(r.videoId)" class="thumb" alt="" />
