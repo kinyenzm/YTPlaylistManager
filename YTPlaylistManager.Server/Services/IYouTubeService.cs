@@ -6,6 +6,7 @@ public interface IYouTubeService
 {
     Task<List<PlaylistDto>> GetMyPlaylistsAsync(CancellationToken ct = default, bool forceRefresh = false, bool includeArchived = false);
     Task<List<PlaylistItemDto>> GetPlaylistItemsAsync(string playlistId, CancellationToken ct = default, bool forceRefresh = false);
+    List<PlaylistItemDto> GetCachedItems(string playlistId);
     Task<DuplicateReportDto> FindDuplicatesAsync(string playlistId, CancellationToken ct = default);
     Task<CrossDuplicateReportDto> FindCrossDuplicatesAsync(CancellationToken ct = default, bool forceRefresh = false);
     Task<RemoveDuplicatesResultDto> RemoveDuplicatesAsync(RemoveDuplicatesRequest req, CancellationToken ct = default);

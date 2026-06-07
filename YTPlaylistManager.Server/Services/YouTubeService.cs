@@ -932,6 +932,10 @@ public class YouTubeService : IYouTubeService
     public List<string> GetSongLocations(string videoId) =>
         CurrentSongLocations(CurrentUserKey(), videoId).Keys.ToList();
 
+    /// <summary>Items de una lista SOLO desde caché (0 cuota, nunca toca YouTube). Vacío si no está cargada.</summary>
+    public List<PlaylistItemDto> GetCachedItems(string playlistId) =>
+        _itemsCache.Load(CurrentUserKey(), playlistId) ?? [];
+
     /// <summary>Para un set de videoIds, las listas (ids) donde está cada uno (caché, 0 cuota).</summary>
     public Dictionary<string, List<string>> GetSongLocationsBatch(List<string> videoIds)
     {

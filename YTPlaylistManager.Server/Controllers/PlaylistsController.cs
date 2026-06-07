@@ -20,8 +20,10 @@ public sealed class PlaylistsController(IYouTubeService youtube, IAiClassifier a
 
     [HttpGet("{id}/items")]
     [ProducesResponseType<List<PlaylistItemDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Items(string id, CancellationToken ct)
-        => Ok(await youtube.GetPlaylistItemsAsync(id, ct));
+    public async Task<IActionResult> Items(string id, [FromQuery] bool cacheOnly, CancellationToken ct)
+        => cacheOnly
+            ? Ok(youtube.GetCachedItems(id))                       // 0 cuota, nunca lee YouTube
+            : Ok(await youtube.GetPlaylistItemsAsync(id, ct));
 
     [HttpGet("{id}/duplicates")]
     [ProducesResponseType<DuplicateReportDto>(StatusCodes.Status200OK)]

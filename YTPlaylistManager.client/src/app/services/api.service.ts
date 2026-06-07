@@ -36,8 +36,8 @@ export class ApiService {
       `${this.base}/playlists/refresh-all`, {},
     );
   }
-  listItems(id: string): Observable<PlaylistItem[]> {
-    return this.http.get<PlaylistItem[]>(`${this.base}/playlists/${id}/items`);
+  listItems(id: string, cacheOnly = false): Observable<PlaylistItem[]> {
+    return this.http.get<PlaylistItem[]>(`${this.base}/playlists/${id}/items${cacheOnly ? '?cacheOnly=true' : ''}`);
   }
   findDuplicates(id: string): Observable<DuplicateReport> {
     return this.http.get<DuplicateReport>(`${this.base}/playlists/${id}/duplicates`);

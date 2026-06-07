@@ -140,7 +140,7 @@ export class CrossDuplicates {
     }
     this.loading.set(true);
     this.error.set(null);
-    this.api.listItems(id).subscribe({
+    this.api.listItems(id, true).subscribe({   // solo caché: nunca lee de YouTube
       next: (items) => {
         this.listItems.set(items);
         this.loading.set(false);
