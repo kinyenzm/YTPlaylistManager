@@ -63,7 +63,9 @@ public class YouTubeService : IYouTubeService
     private string CurrentUserKey()
     {
         var t = _tokenStore.Load();
-        var seed = t?.RefreshToken ?? t?.AccessToken ?? "anon";
+        // Solo el refresh token: el access token rota (~1h) y fragmentaría los datos
+        // de la misma cuenta en varias claves distintas (caché, pendientes, etc.).
+        var seed = t?.RefreshToken ?? "anon";
         var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(seed));
         return Convert.ToHexString(bytes)[..16];
     }
@@ -301,7 +303,9 @@ public class YouTubeService : IYouTubeService
         _quota.Add(1);
         var playlistTitle = pResp.Items.FirstOrDefault()?.Snippet.Title ?? playlistId;
 
-        var items = await GetPlaylistItemsAsync(playlistId, ct);
+        // Detección precisa: re-leemos los items DESDE YouTube (no de la caché, que puede
+        // estar desincronizada por remociones locales no subidas). Esto refresca la caché.
+        var items = await GetPlaylistItemsAsync(playlistId, ct, forceRefresh: true);
 
         var groups = new List<DuplicateGroupDto>();
 
@@ -673,15 +677,26 @@ public class YouTubeService : IYouTubeService
         {
             var stillPending = new List<PendingSource>();
             var deletedIds = new List<string>();
+            var archivedEntries = new List<ArchivedPlaylistEntry>();
             foreach (var s in plan.Sources)
             {
                 if (paused) { stillPending.Add(s); continue; }
+                var songsCount = _itemsCache.Load(userKey, s.Id)?.Count ?? 0;
                 try
                 {
                     await yt.Playlists.Delete(s.Id).ExecuteAsync(ct);
                     _quota.Add(50);
                     _activity.Publish(new ActivityEvent("delete-list", s.Title, "", "", DateTime.UtcNow));
                     deletedIds.Add(s.Id);
+                    archivedEntries.Add(new ArchivedPlaylistEntry
+                    {
+                        Id = s.Id,
+                        Title = s.Title,
+                        ArchivedAtUtc = DateTime.UtcNow,
+                        MergedIntoPlaylistId = targetId,
+                        MergedIntoPlaylistTitle = plan.TargetPlaylistTitle,
+                        SongsCount = songsCount,
+                    });
                     _itemsCache.Invalidate(userKey, s.Id);
                 }
                 catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
@@ -692,6 +707,15 @@ public class YouTubeService : IYouTubeService
                 catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
                 {
                     deletedIds.Add(s.Id);   // ya no existía → la damos por borrada
+                    archivedEntries.Add(new ArchivedPlaylistEntry
+                    {
+                        Id = s.Id,
+                        Title = s.Title,
+                        ArchivedAtUtc = DateTime.UtcNow,
+                        MergedIntoPlaylistId = targetId,
+                        MergedIntoPlaylistTitle = plan.TargetPlaylistTitle,
+                        SongsCount = songsCount,
+                    });
                     _itemsCache.Invalidate(userKey, s.Id);
                 }
                 catch (Google.GoogleApiException ex)
@@ -702,6 +726,7 @@ public class YouTubeService : IYouTubeService
             }
             deletedSources = deletedIds.Count;
             remainingSources = stillPending;
+            if (archivedEntries.Count > 0) _archivedStore.Add(archivedEntries);
             RemoveFromPlaylistListCache(deletedIds);
         }
 
@@ -1044,6 +1069,45 @@ public class YouTubeService : IYouTubeService
         return staged;
     }
 
+    /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist. Local-first: deja en cola para sincronizar al Subir.</summary>
+    public int StageRemoveItemsFromPlaylist(string playlistId, List<string> playlistItemIds)
+    {
+        if (string.IsNullOrEmpty(playlistId) || playlistItemIds is null || playlistItemIds.Count == 0) return 0;
+        var userKey = CurrentUserKey();
+        var cache = _cacheStore.Load();
+        var title = cache?.Playlists?.FirstOrDefault(p => p.Id == playlistId)?.Title ?? playlistId;
+        var items = _itemsCache.Load(userKey, playlistId);
+        if (items is null) return 0;
+
+        var targetIds = playlistItemIds.Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        var removedItemIds = new HashSet<string>(StringComparer.Ordinal);
+        int staged = 0;
+        foreach (var itemId in targetIds)
+        {
+            var hit = items.FirstOrDefault(i => i.PlaylistItemId == itemId);
+            if (hit is null) continue;
+            _songMoves.Add(new PendingSongMove
+            {
+                Id = Guid.NewGuid().ToString("N")[..12],
+                UserKey = userKey,
+                VideoId = hit.VideoId,
+                Title = hit.Title,
+                ChannelTitle = hit.ChannelTitle,
+                ThumbnailUrl = hit.ThumbnailUrl,
+                AddTo = [],
+                RemoveFrom = [new SongMoveRemoval { PlaylistId = playlistId, PlaylistTitle = title, PlaylistItemId = hit.PlaylistItemId }],
+                CreatedAtUtc = DateTime.UtcNow,
+            });
+            removedItemIds.Add(hit.PlaylistItemId);
+            staged++;
+        }
+        if (removedItemIds.Count > 0)
+            _itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());
+
+        _log.Add("RemoveItems(local)", $"playlist={playlistId} staged={staged}");
+        return staged;
+    }
+
     public async Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default)
     {
         var userKey = CurrentUserKey();
@@ -1088,14 +1152,37 @@ public class YouTubeService : IYouTubeService
 
     public Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default)
     {
-        var archived = _archivedStore.LoadAll();
-        var list = archived.Select(a => new PlaylistArchivedInfoDto(
-            Id: a.Id,
-            Title: a.Title,
-            ArchivedAt: a.ArchivedAtUtc,
-            MergedIntoPlaylistId: a.MergedIntoPlaylistId,
-            MergedIntoPlaylistTitle: a.MergedIntoPlaylistTitle,
-            SongsCount: a.SongsCount)).ToList();
+        var byId = new Dictionary<string, PlaylistArchivedInfoDto>(StringComparer.Ordinal);
+        foreach (var a in _archivedStore.LoadAll())
+        {
+            byId[a.Id] = new PlaylistArchivedInfoDto(
+                Id: a.Id,
+                Title: a.Title,
+                ArchivedAt: a.ArchivedAtUtc,
+                MergedIntoPlaylistId: a.MergedIntoPlaylistId,
+                MergedIntoPlaylistTitle: a.MergedIntoPlaylistTitle,
+                SongsCount: a.SongsCount);
+        }
+
+        // Recuperar listas borradas de merges anteriores que el flujo previo no
+        // registró en el store de archivadas: se derivan de las revisiones de
+        // merge que pidieron borrar las listas origen.
+        foreach (var plan in _reviewStore.LoadAll().Where(p => p.DeleteSources))
+        {
+            foreach (var s in plan.Sources)
+            {
+                if (byId.ContainsKey(s.PlaylistId)) continue;
+                byId[s.PlaylistId] = new PlaylistArchivedInfoDto(
+                    Id: s.PlaylistId,
+                    Title: s.Title,
+                    ArchivedAt: plan.CreatedAtUtc,
+                    MergedIntoPlaylistId: plan.TargetPlaylistId,
+                    MergedIntoPlaylistTitle: plan.TargetPlaylistTitle,
+                    SongsCount: s.ItemCount);
+            }
+        }
+
+        var list = byId.Values.OrderByDescending(x => x.ArchivedAt).ToList();
         return Task.FromResult(list);
     }
 

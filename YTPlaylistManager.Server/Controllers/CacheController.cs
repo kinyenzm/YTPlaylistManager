@@ -128,4 +128,5 @@ public class CacheController : ControllerBase
             return StatusCode(500, new { message = "Error al obtener historial de merges", error = ex.Message });
         }
     }
+
 }

@@ -80,6 +80,12 @@ public class SongsController : ControllerBase
     public IActionResult RemoveFromPlaylist([FromBody] RemoveFromPlaylistRequest req)
         => Ok(new { staged = _youtube.StageRemoveFromPlaylist(req.PlaylistId, req.VideoIds) });
 
+    /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist (staged).</summary>
+    [HttpPost("remove-items")]
+    [RequireGoogleSession]
+    public IActionResult RemoveItems([FromBody] RemoveItemsRequest req)
+        => Ok(new { staged = _youtube.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
+
     [HttpGet("pending-moves")]
     [RequireGoogleSession]
     [ProducesResponseType<List<PendingSongMoveDto>>(StatusCodes.Status200OK)]

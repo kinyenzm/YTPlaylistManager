@@ -190,6 +190,8 @@ public record SongMoveBulkResultDto(
 
 public record RemoveFromPlaylistRequest(string PlaylistId, List<string> VideoIds);
 
+public record RemoveItemsRequest(string PlaylistId, List<string> PlaylistItemIds);
+
 public record QuotaDto(int Used, int Limit, int Remaining, string Date);
 
 public record MergeReviewSummaryDto(
