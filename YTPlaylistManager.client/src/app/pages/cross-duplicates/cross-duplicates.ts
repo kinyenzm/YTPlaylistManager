@@ -1,15 +1,14 @@
-import { Component, ChangeDetectionStrategy, signal, computed, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, effect, inject, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
+import { PendingService } from '../../services/pending.service';
 import {
   CrossDuplicateReport,
   Playlist,
   PlaylistItem,
   SongSearchResult,
-  PendingSongMove,
-  SongMoveUploadResult,
 } from '../../models/models';
 
 type Mode = 'repeated' | 'byList' | 'bySong';
@@ -91,14 +90,16 @@ export class CrossDuplicates {
   // Listas ordenadas para el modal: primero donde ya está, luego el resto (alfabético).
   protected readonly editorPlaylists = signal<Playlist[]>([]);
 
-  // Cambios staged
-  protected readonly pendingMoves = signal<PendingSongMove[]>([]);
-  protected readonly uploadingId = signal<string | null>(null);
-  protected readonly moveResult = signal<SongMoveUploadResult | null>(null);
+  private readonly pendingSvc = inject(PendingService);
 
   constructor() {
     this.loadPlaylists();
-    this.loadPending();
+    this.pendingSvc.refresh();
+    // Refrescar el modo activo cuando el panel global sube/descarta cambios.
+    effect(() => {
+      if (this.pendingSvc.mutations() === 0) return;
+      untracked(() => this.refreshCurrentMode());
+    });
   }
 
   setMode(m: Mode): void {
@@ -110,13 +111,6 @@ export class CrossDuplicates {
   private loadPlaylists(): void {
     this.api.listPlaylists().subscribe({
       next: (p) => this.allPlaylists.set(p.filter((x) => !x.isArchived)),
-      error: (e) => console.error(e),
-    });
-  }
-
-  loadPending(): void {
-    this.api.pendingSongMoves().subscribe({
-      next: (m) => this.pendingMoves.set(m),
       error: (e) => console.error(e),
     });
   }
@@ -191,7 +185,7 @@ export class CrossDuplicates {
       next: () => {
         this.bulkSelected.set(new Set());
         this.pickList(this.listId());
-        this.loadPending();
+        this.pendingSvc.refresh();
       },
       error: (e) => {
         this.error.set(this.translate.instant('cross.assign_error'));
@@ -224,7 +218,6 @@ export class CrossDuplicates {
     this.editingVideoId.set(row.videoId);
     this.editingTitle.set(row.title);
     this.singleMode.set(false);
-    this.moveResult.set(null);
     this.editorLoading.set(true);
     this.api.songLocations(row.videoId).subscribe({
       next: (locs) => {
@@ -291,7 +284,7 @@ export class CrossDuplicates {
         next: () => {
           this.applying.set(false);
           this.closeEditor();
-          this.loadPending();
+          this.pendingSvc.refresh();
           this.refreshCurrentMode();
         },
         error: (e) => {
@@ -309,75 +302,4 @@ export class CrossDuplicates {
     else if (m === 'bySong' && this.results().length) this.search();
   }
 
-  // ── Pendientes (staged) ──
-  uploadMove(id: string): void {
-    if (!confirm(this.translate.instant('cross.assign_upload_confirm'))) return;
-    this.uploadingId.set(id);
-    this.moveResult.set(null);
-    this.error.set(null);
-    this.api.uploadSongMove(id).subscribe({
-      next: (r) => {
-        this.moveResult.set(r);
-        this.uploadingId.set(null);
-        this.api.refreshQuota();
-        this.loadPending();
-        this.refreshCurrentMode();
-      },
-      error: (e) => {
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('cross.assign_upload_error'),
-        );
-        this.uploadingId.set(null);
-        console.error(e);
-      },
-    });
-  }
-
-  discardMove(id: string): void {
-    if (!confirm(this.translate.instant('cross.assign_discard_confirm'))) return;
-    this.api.discardSongMove(id).subscribe({
-      next: () => {
-        this.loadPending();
-        this.refreshCurrentMode();
-      },
-      error: (e) => console.error(e),
-    });
-  }
-
-  uploadAll(): void {
-    if (!confirm(this.translate.instant('cross.upload_all_confirm', { n: this.pendingMoves().length }))) return;
-    this.uploadingId.set('ALL');
-    this.moveResult.set(null);
-    this.error.set(null);
-    this.api.uploadAllSongMoves().subscribe({
-      next: () => {
-        this.uploadingId.set(null);
-        this.api.refreshQuota();
-        this.loadPending();
-        this.refreshCurrentMode();
-      },
-      error: (e) => {
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('cross.assign_upload_error'),
-        );
-        this.uploadingId.set(null);
-        console.error(e);
-      },
-    });
-  }
-
-  discardAll(): void {
-    if (!confirm(this.translate.instant('cross.discard_all_confirm', { n: this.pendingMoves().length }))) return;
-    this.api.discardAllSongMoves().subscribe({
-      next: () => {
-        this.loadPending();
-        this.refreshCurrentMode();
-      },
-      error: (e) => console.error(e),
-    });
-  }
 }

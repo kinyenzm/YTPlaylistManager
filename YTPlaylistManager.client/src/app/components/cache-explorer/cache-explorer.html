@@ -7,6 +7,8 @@
     </div>
   </div>
 
+  <p class="muted">{{ 'cache.intro' | translate }}</p>
+
   @if (isLoading()) {
     <p class="muted">{{ 'cache.loading' | translate }}</p>
   }
@@ -35,6 +37,13 @@
       class="tab-btn"
     >
       {{ 'cache.tab_reviews' | translate:{ count: mergeReviews().length } }}
+    </button>
+    <button
+      (click)="switchTab('activity')"
+      [class.active]="activeTab() === 'activity'"
+      class="tab-btn"
+    >
+      {{ 'cache.tab_activity' | translate:{ count: activityLog().length } }}
     </button>
   </div>
 
@@ -148,6 +157,28 @@
     </div>
   }
 
+  @if (activeTab() === 'activity') {
+    <div class="tab-content">
+      @if (activityLog().length > 0) {
+        @for (a of activityLog(); track $index) {
+          <div class="row" style="justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft)">
+            <div class="muted" style="font-size:0.92em;min-width:0">
+              @switch (a.type) {
+                @case ('insert') { <i class="fa-solid fa-plus"></i> {{ 'activity.added' | translate:{ title: a.title, playlist: a.playlist } }} }
+                @case ('delete') { <i class="fa-solid fa-minus"></i> {{ 'activity.removed' | translate:{ title: a.title, playlist: a.playlist } }} }
+                @case ('delete-list') { <i class="fa-solid fa-trash"></i> {{ 'activity.deleted_list' | translate:{ title: a.title } }} }
+                @default { {{ a.type }} · {{ a.title }} }
+              }
+            </div>
+            <span class="muted" style="flex-shrink:0;font-size:0.8em">{{ a.at | date: 'short' }}</span>
+          </div>
+        }
+      } @else {
+        <p class="muted">{{ 'cache.activity_empty' | translate }}</p>
+      }
+    </div>
+  }
+
   @if (selectedSongHistory()) {
     <div class="modal-overlay" (click)="closeHistoryModal()">
       <div class="modal-content" (click)="$event.stopPropagation()">
@@ -223,8 +254,8 @@
   }
 
   .tab-btn.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
+    color: var(--accent2);
+    border-bottom-color: var(--accent2);
   }
 
   .tab-content {
@@ -266,7 +297,7 @@
   .stat-card .large {
     font-size: 1.6em;
     font-weight: 600;
-    color: var(--accent);
+    color: var(--accent2);
   }
 
   table {
@@ -289,7 +320,7 @@
 
   th {
     font-weight: 600;
-    color: var(--accent);
+    color: var(--muted);
   }
 
   code {
@@ -354,13 +385,13 @@
   .dot {
     width: 12px;
     height: 12px;
-    background: var(--accent);
+    background: var(--accent2);
     border-radius: 50%;
     flex-shrink: 0;
     margin-top: 3px;
   }
 
   .accent {
-    color: var(--accent);
+    color: var(--accent2);
   }
 </style>

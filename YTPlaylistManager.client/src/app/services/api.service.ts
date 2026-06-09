@@ -6,7 +6,7 @@ import {
   PendingUpload, UploadResult, PendingSongMove, SongMoveUploadResult, SongMoveBulkResult, Quota,
   ClassifyResult, AuthStatus, CrossDuplicateReport,
   SongSearchQuery, SongSearchResult, CacheStatus, SongMovementLog,
-  PlaylistArchivedInfo, MergeReviewSummary
+  PlaylistArchivedInfo, MergeReviewSummary, ActivityItem
 } from '../models/models';
 import { environment } from '../../environments/environment';
 
@@ -108,6 +108,12 @@ export class ApiService {
   }
   removeSongsFromPlaylist(playlistId: string, videoIds: string[]): Observable<{ staged: number }> {
     return this.http.post<{ staged: number }>(`${this.base}/songs/remove-from-playlist`, { playlistId, videoIds });
+  }
+  removeItemsFromPlaylist(playlistId: string, playlistItemIds: string[]): Observable<{ staged: number }> {
+    return this.http.post<{ staged: number }>(`${this.base}/songs/remove-items`, { playlistId, playlistItemIds });
+  }
+  getActivityLog(take = 200): Observable<ActivityItem[]> {
+    return this.http.get<ActivityItem[]>(`${this.base}/activity/log?take=${take}`);
   }
   classify(id: string, mode: 'genre' | 'mood' | 'decade'): Observable<ClassifyResult> {
     return this.http.post<ClassifyResult>(`${this.base}/playlists/${id}/classify`, { playlistId: id, mode });

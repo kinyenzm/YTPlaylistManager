@@ -2,65 +2,17 @@
 <h3>{{ 'cross.title' | translate }}</h3>
 <p class="muted">{{ 'cross.intro' | translate }}</p>
 
-<div class="row" style="gap:6px;flex-wrap:wrap">
-  <button [class.secondary]="mode() !== 'repeated'" (click)="setMode('repeated')">{{ 'cross.mode_repeated' | translate }}</button>
-  <button [class.secondary]="mode() !== 'byList'" (click)="setMode('byList')">{{ 'cross.mode_bylist' | translate }}</button>
-  <button [class.secondary]="mode() !== 'bySong'" (click)="setMode('bySong')">{{ 'cross.mode_bysong' | translate }}</button>
+<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px">
+  <span class="muted" style="font-weight:600">{{ 'cross.view_label' | translate }}</span>
+  <div class="segmented">
+    <button [class.active]="mode() === 'repeated'" (click)="setMode('repeated')">{{ 'cross.mode_repeated' | translate }}</button>
+    <button [class.active]="mode() === 'byList'" (click)="setMode('byList')">{{ 'cross.mode_bylist' | translate }}</button>
+    <button [class.active]="mode() === 'bySong'" (click)="setMode('bySong')">{{ 'cross.mode_bysong' | translate }}</button>
+  </div>
 </div>
 
 @if (error()) {
   <div class="card danger" style="margin-top:12px">{{ error() }}</div>
-}
-
-@if (pendingMoves().length > 0) {
-  <div class="card" style="border-color:var(--accent2);margin-top:12px">
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <strong>⬆ {{ 'cross.pending_title' | translate:{ count: pendingMoves().length } }}</strong>
-      @if (pendingMoves().length > 1) {
-        <div class="row" style="gap:6px">
-          <button (click)="uploadAll()" [disabled]="uploadingId() !== null">
-            {{ (uploadingId() === 'ALL' ? 'cross.uploading' : 'cross.upload_all') | translate }}
-          </button>
-          <button class="secondary" (click)="discardAll()" [disabled]="uploadingId() !== null">
-            {{ 'cross.discard_all' | translate }}
-          </button>
-        </div>
-      }
-    </div>
-    @if (moveResult(); as mr) {
-      <div class="muted" style="margin-top:4px">
-        ✓ {{ 'cross.move_done' | translate:{ added: mr.added, removed: mr.removed } }}
-        @if (mr.paused) { <span class="danger"> {{ 'cross.move_paused' | translate:{ rem: mr.remainingOps } }}</span> }
-      </div>
-    }
-    @for (m of pendingMoves(); track m.id) {
-      <div class="row" style="justify-content:space-between;margin-top:10px;align-items:flex-start;gap:8px">
-        <div>
-          <div>{{ m.title }}</div>
-          @if (m.addTo.length) {
-            <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:2px">
-              <span class="muted">➕ {{ 'cross.move_add' | translate }}</span>
-              @for (t of m.addTo; track t) { <span class="tag">{{ t }}</span> }
-            </div>
-          }
-          @if (m.removeFrom.length) {
-            <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:2px">
-              <span class="muted">➖ {{ 'cross.move_remove' | translate }}</span>
-              @for (t of m.removeFrom; track t) { <span class="tag">{{ t }}</span> }
-            </div>
-          }
-        </div>
-        <div class="row" style="gap:6px">
-          <button (click)="uploadMove(m.id)" [disabled]="uploadingId() !== null">
-            {{ (uploadingId() === m.id ? 'cross.uploading' : 'cross.move_upload') | translate:{ quota: m.estimatedQuotaUnits } }}
-          </button>
-          <button class="secondary" (click)="discardMove(m.id)" [disabled]="uploadingId() !== null">
-            {{ 'cross.move_discard' | translate }}
-          </button>
-        </div>
-      </div>
-    }
-  </div>
 }
 
 <!-- ── Modo: Repetidas ── -->
@@ -122,9 +74,10 @@
       </div>
     }
     @for (it of listItemsSorted(); track it.playlistItemId) {
-      <div class="card">
+      <div class="card selectable" [class.selected]="bulkSelected().has(it.videoId)" (click)="toggleBulk(it.videoId)">
         <div class="row" style="align-items:flex-start;gap:8px">
-          <input type="checkbox" [checked]="bulkSelected().has(it.videoId)" (change)="toggleBulk(it.videoId)" />
+          <input type="checkbox" [checked]="bulkSelected().has(it.videoId)"
+                 (click)="$event.stopPropagation()" (change)="toggleBulk(it.videoId)" />
           <img [src]="it.thumbnailUrl || thumb(it.videoId)" class="thumb" alt="" />
           <div style="flex:1">
             <div>{{ it.title }}</div>
@@ -136,7 +89,7 @@
               </div>
             }
           </div>
-          <button class="secondary" (click)="openEditor({ videoId: it.videoId, title: it.title })">
+          <button class="secondary" (click)="$event.stopPropagation(); openEditor({ videoId: it.videoId, title: it.title })">
             {{ 'cross.assign_open' | translate }}
           </button>
         </div>
@@ -187,17 +140,18 @@
       @if (editorLoading()) {
         <div class="muted">{{ 'common.loading' | translate }}</div>
       } @else {
-        <div class="row" style="gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <div class="row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
           <span class="muted">{{ 'cross.mode_label' | translate }}</span>
-          <button [class.secondary]="singleMode()" (click)="setSingle(false)">{{ 'cross.mode_multi' | translate }}</button>
-          <button [class.secondary]="!singleMode()" (click)="setSingle(true)">{{ 'cross.mode_single' | translate }}</button>
+          <div class="segmented">
+            <button [class.active]="!singleMode()" (click)="setSingle(false)">{{ 'cross.mode_multi' | translate }}</button>
+            <button [class.active]="singleMode()" (click)="setSingle(true)">{{ 'cross.mode_single' | translate }}</button>
+          </div>
         </div>
-        <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:6px">
+        <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:6px">
           @for (pl of editorPlaylists(); track pl.id) {
-            <label class="row" style="gap:8px;margin:2px 0;cursor:pointer">
+            <label class="opt-row" [class.on]="isChecked(pl.id)">
               <input type="checkbox" [checked]="isChecked(pl.id)" (change)="toggle(pl.id)" />
               <span style="flex:1">{{ pl.title }}</span>
-              @if (isChecked(pl.id)) { <span class="tag" style="background:var(--accent2);color:var(--ink)">✓</span> }
               <span class="muted">{{ pl.itemCount }}</span>
             </label>
           }

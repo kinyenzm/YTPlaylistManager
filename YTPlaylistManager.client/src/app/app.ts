@@ -11,7 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
 import { AuthStatus } from './models/models';
 import { LangSwitcher } from './components/lang-switcher/lang-switcher';
-import { LiveActivity } from './components/live-activity/live-activity';
+import { PendingChanges } from './components/pending-changes/pending-changes';
 
 const STORAGE_KEY = 'ytpm.lang';
 const SUPPORTED = ['es', 'en'] as const;
@@ -33,16 +33,16 @@ function detectInitialLang(): Lang {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher, LiveActivity],
+  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher, PendingChanges],
   template: `
     <header class="app-header">
-      <h2 style="margin:0"><a routerLink="/">{{ 'app.title' | translate }}</a></h2>
+      <h2 style="margin:0"><a routerLink="/"><i class="fa-brands fa-youtube"></i> {{ 'app.title' | translate }}</a></h2>
       <div class="row">
         @if (quota(); as q) {
           <span class="tag" [title]="'app.nav.quota_title' | translate"
                 [style.background]="q.remaining < 500 ? 'var(--accent)' : 'var(--border)'"
                 [style.color]="q.remaining < 500 ? '#fff' : 'var(--text)'">
-            ⚡ {{ q.remaining }}/{{ q.limit }}
+            <i class="fa-solid fa-bolt"></i> {{ q.remaining }}/{{ q.limit }}
           </span>
         }
         <app-lang-switcher />
@@ -60,7 +60,7 @@ function detectInitialLang(): Lang {
     <main>
       <router-outlet />
     </main>
-    <app-live-activity />
+    <app-pending-changes />
   `,
 })
 export class App implements OnInit {

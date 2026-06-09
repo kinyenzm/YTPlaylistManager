@@ -1,9 +1,10 @@
-import { Component, ChangeDetectionStrategy, signal, computed, inject, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, computed, effect, inject, untracked, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
-import { Playlist, MergeResult, MergePreview, PendingUpload, UploadResult } from '../../models/models';
+import { PendingService } from '../../services/pending.service';
+import { Playlist, MergeResult, MergePreview } from '../../models/models';
 
 interface RefreshAllResult {
   playlistsRefreshed: number;
@@ -21,6 +22,16 @@ interface RefreshAllResult {
 export class PlaylistsPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly translate = inject(TranslateService);
+  private readonly pending = inject(PendingService);
+
+  constructor() {
+    // Recargar las listas cuando el panel global sube/descarta cambios
+    // (las uniones subidas borran listas origen).
+    effect(() => {
+      if (this.pending.mutations() === 0) return;
+      untracked(() => this.load());
+    });
+  }
 
   protected readonly playlists = signal<Playlist[]>([]);
   protected readonly loading = signal(false);
@@ -30,16 +41,6 @@ export class PlaylistsPage implements OnInit {
   protected readonly mergeResult = signal<MergeResult | null>(null);
   protected readonly preview = signal<MergePreview | null>(null);
   protected readonly previewing = signal(false);
-
-  // Cambios aplicados en local, pendientes de subir a YouTube.
-  protected readonly pendingUploads = signal<PendingUpload[]>([]);
-  protected readonly showPendingPanel = signal(false);
-  protected readonly uploadingId = signal<string | null>(null);
-  protected readonly uploadResult = signal<UploadResult | null>(null);
-
-  protected readonly pendingTotalSongs = computed<number>(() =>
-    this.pendingUploads().reduce((n, p) => n + p.itemCount, 0),
-  );
 
   protected readonly selectedPlaylists = computed<Playlist[]>(() =>
     this.playlists()
@@ -79,69 +80,10 @@ export class PlaylistsPage implements OnInit {
         this.authChecked.set(true);
         if (s.isAuthenticated) {
           this.load();
-          this.loadPendingUploads();
+          this.pending.refresh();
         }
       },
       error: () => this.authChecked.set(true),
-    });
-  }
-
-  loadPendingUploads(): void {
-    this.api.pendingUploads().subscribe({
-      next: (p) => this.pendingUploads.set(p),
-      error: (e) => console.error(e),
-    });
-  }
-
-  openPendingPanel(): void {
-    this.uploadResult.set(null);
-    this.showPendingPanel.set(true);
-  }
-
-  closePendingPanel(): void {
-    this.showPendingPanel.set(false);
-  }
-
-  uploadPending(id: string): void {
-    const pu = this.pendingUploads().find((p) => p.id === id);
-    if (pu) {
-      const msg = this.translate.instant('playlists.upload_confirm', {
-        songs: pu.itemCount,
-        sources: pu.sourceTitles.join(', ') || '—',
-      });
-      if (!confirm(msg)) return;
-    }
-    this.uploadingId.set(id);
-    this.uploadResult.set(null);
-    this.error.set(null);
-    this.api.uploadPending(id).subscribe({
-      next: (r) => {
-        this.uploadResult.set(r);
-        this.uploadingId.set(null);
-        this.api.refreshQuota();
-        this.loadPendingUploads();
-        this.load();
-      },
-      error: (e) => {
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('playlists.upload_error'),
-        );
-        this.uploadingId.set(null);
-        console.error(e);
-      },
-    });
-  }
-
-  discardPending(id: string): void {
-    if (!confirm(this.translate.instant('playlists.pending_discard_confirm'))) return;
-    this.api.discardPending(id).subscribe({
-      next: () => {
-        this.loadPendingUploads();
-        this.load();
-      },
-      error: (e) => console.error(e),
     });
   }
 
@@ -173,6 +115,13 @@ export class PlaylistsPage implements OnInit {
       next.add(id);
     }
     this.selectedIds.set(next);
+  }
+
+  // Selección por click en toda la card; archivadas/en cola no son seleccionables
+  // (mismas condiciones que tenía el checkbox deshabilitado).
+  toggleCard(p: Playlist): void {
+    if (p.isArchived || p.queuedForMerge) return;
+    this.toggle(p.id);
   }
 
   openPreview(): void {
@@ -229,7 +178,7 @@ export class PlaylistsPage implements OnInit {
           this.merging.set(false);
           this.selectedIds.set(new Set());
           this.load();
-          this.loadPendingUploads();
+          this.pending.refresh();
         },
         error: (e) => {
           this.error.set(this.translate.instant('playlists.error_merge'));

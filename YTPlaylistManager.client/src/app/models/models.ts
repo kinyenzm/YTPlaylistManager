@@ -215,6 +215,14 @@ export interface SongMovementLog {
   events: SongMovementEvent[];
 }
 
+export interface ActivityItem {
+  type: string;
+  title: string;
+  playlist: string;
+  videoId: string;
+  at: string;
+}
+
 export interface PlaylistArchivedInfo {
   id: string;
   title: string;

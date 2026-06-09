@@ -29,18 +29,28 @@
 @if (duplicates(); as dup) {
   <div class="card">
     <strong>{{ 'detail.dup_summary' | translate:{ count: dup.duplicateCount, total: dup.totalItems } }}</strong>
-    @for (g of dup.groups; track g.key) {
+    @if (dup.duplicateCount > 0) {
+      <p class="muted" style="margin:4px 0 0">{{ 'detail.dup_action_hint' | translate }}</p>
+    }
+    @if (stagedMsg(); as sm) {
+      <p class="accent" style="margin:6px 0 0">{{ sm }}</p>
+    }
+    @for (g of dupGroupsSorted(); track g.key) {
       <div style="margin-top:10px">
         <div class="tag">{{ g.matchType === 'videoId' ? ('detail.match_videoId' | translate) : ('detail.match_normalizedTitle' | translate) }}</div>
         @for (it of g.items; track it.playlistItemId) {
-          <div class="row" style="margin-top:4px">
+          <div class="row" style="margin-top:4px;align-items:center;gap:8px">
             @if (it.thumbnailUrl) {
               <img [src]="it.thumbnailUrl" class="thumb" alt="" />
             }
-            <div>
-              <div>{{ it.title }}</div>
+            <div style="flex:1">
+              <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + id()" target="_blank" rel="noopener">{{ it.title }}</a>
               <div class="muted">#{{ it.position }} · {{ it.channelTitle }}</div>
             </div>
+            @if (g.items.length > 1) {
+              <button class="secondary" (click)="keepThis(g.items, it.playlistItemId)">{{ 'detail.dup_keep_this' | translate }}</button>
+            }
+            <button class="secondary danger" (click)="removeCopy(it)">{{ 'detail.dup_remove_copy' | translate }}</button>
           </div>
         }
       </div>
@@ -76,7 +86,7 @@
       <img [src]="it.thumbnailUrl" class="thumb" alt="" />
     }
     <div>
-      <div>{{ it.title }}</div>
+      <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + id()" target="_blank" rel="noopener">{{ it.title }}</a>
       <div class="muted">{{ it.channelTitle }}</div>
     </div>
   </div>

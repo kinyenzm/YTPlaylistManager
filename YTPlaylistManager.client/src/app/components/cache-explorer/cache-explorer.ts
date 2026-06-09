@@ -1,8 +1,8 @@
-import { Component, ChangeDetectionStrategy, signal, inject, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, inject, input, effect, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
-import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, SongMovementLog } from '../../models/models';
+import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, SongMovementLog, ActivityItem } from '../../models/models';
 
 @Component({
   selector: 'app-cache-explorer',
@@ -18,14 +18,32 @@ export class CacheExplorer implements OnInit {
   archivedPlaylists = signal<PlaylistArchivedInfo[]>([]);
   mergeReviews = signal<MergeReviewSummary[]>([]);
   selectedSongHistory = signal<SongMovementLog | null>(null);
+  activityLog = signal<ActivityItem[]>([]);
 
   isLoading = signal(false);
   error = signal<string | null>(null);
 
-  activeTab = signal<'dashboard' | 'archived' | 'reviews'>('dashboard');
+  activeTab = signal<'dashboard' | 'archived' | 'reviews' | 'activity'>('dashboard');
+
+  // Deep-link: el "Ver más" del panel flotante navega con ?tab=activity.
+  readonly tab = input<string>();
+
+  constructor() {
+    effect(() => {
+      if (this.tab() === 'activity') this.activeTab.set('activity');
+    });
+  }
 
   ngOnInit(): void {
     this.loadCacheData();
+    this.loadActivity();
+  }
+
+  loadActivity(): void {
+    this.api.getActivityLog(1000).subscribe({
+      next: (log) => this.activityLog.set(log),
+      error: (err) => console.error('Error loading activity log:', err),
+    });
   }
 
   loadCacheData(): void {
@@ -85,7 +103,7 @@ export class CacheExplorer implements OnInit {
     this.selectedSongHistory.set(null);
   }
 
-  switchTab(tab: 'dashboard' | 'archived' | 'reviews'): void {
+  switchTab(tab: 'dashboard' | 'archived' | 'reviews' | 'activity'): void {
     this.activeTab.set(tab);
   }
 
