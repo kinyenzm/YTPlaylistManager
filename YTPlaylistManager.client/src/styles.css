@@ -361,3 +361,28 @@ th { text-align: left; color: var(--muted); font-weight: 600; font-size: 0.72rem
 td { padding: 10px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
 tr:last-child td { border-bottom: 0; }
 code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em; }
+
+/* Badges editables del organizador: x visible solo en hover; tachado = quitar preparado. */
+.badge-edit { position: relative; padding-right: 6px; white-space: nowrap; }
+.badge-edit .badge-x {
+  background: none; border: none; cursor: pointer; padding: 0 2px; margin: 0;
+  font-size: .85em; color: inherit; opacity: 0; transition: opacity .15s;
+}
+.badge-edit:hover .badge-x { opacity: 1; }
+.badge-edit.staged-out { text-decoration: line-through; opacity: .55; }
+.badge-edit.staged-out .badge-x { opacity: 1; }
+.dup-badge {
+  background: #d33; color: #fff; border-radius: 999px;
+  padding: 2px 8px; font-size: .8em; font-weight: 700; flex-shrink: 0;
+}
+
+/* Barras de acciones/filtros: una sola línea en desktop (los select globales
+   son width:100% y rompían la fila); apilado vertical solo en móvil. */
+.toolbar { flex-wrap: wrap; gap: 8px; }
+.toolbar select { width: auto; flex: 0 0 auto; }
+@media (max-width: 640px) {
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar select,
+  .toolbar input[type=text],
+  .toolbar button { width: 100%; flex: 1 1 auto; }
+}

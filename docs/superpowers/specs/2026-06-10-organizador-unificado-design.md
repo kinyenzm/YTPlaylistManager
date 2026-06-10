@@ -51,8 +51,8 @@ con peor UX (requiere Enter). Además:
     y "mismo título normalizado". Hoy todos los "Deleted video" se agrupan como misma canción.
   - `SongSearchService` (búsquedas por nombre/ID): excluidos de resultados.
 - En el modo "Por lista" del organizador NO se ocultan: se muestran con tag "No disponible"
-  para que el usuario pueda limpiarlos de la lista, pero no se reportan como "aparece en otras
-  listas".
+  pero en SOLO LECTURA — sin badges editables ni "Asignar a listas" (YouTube no permite
+  gestionar videos sin acceso). Habilitar su edición queda como configuración futura.
 
 ### 4. Badges de playlists editables en tarjetas (3 modos del organizador)
 
@@ -82,6 +82,45 @@ con peor UX (requiere Enter). Además:
   0 cuota) buscando por id; señal propia `playlistTitle`.
 - El `<h3>` usa esa señal; el reporte de duplicados deja de ser la fuente del título.
 
+### 7. Contador de repetidas por playlist en "Por lista"
+
+- Con la data ya cacheada (items por playlist), el backend expone un mapa
+  `playlistId → duplicateCount` (canciones de esa lista que aparecen en ≥2 playlists).
+  Cálculo 100% sobre caché local, 0 cuota. Endpoint nuevo cache-only
+  (p. ej. `GET /api/songs/duplicate-counts`).
+- El selector de "Por lista" muestra el número junto a cada lista:
+  `Título (120) — 5 repetidas`. Limitación: `<option>` nativo no permite color rojo;
+  el número va en el texto de la opción, y junto al selector se muestra un badge rojo
+  con las repetidas de la lista seleccionada.
+
+### 8. Título del documento (pestaña del navegador) en detalle
+
+- Al entrar a `playlist/{id}`, además del `<h3>`, se setea el título del documento vía
+  `Title` de Angular: `"{nombre de la lista} — {nombre de la app}"`.
+- Al salir de la página se restaura el título base de la app.
+
+### 9. Timeout y feedback del botón "Ordenar por IA"
+
+- `NvidiaClassifier` hoy no configura timeout → HttpClient default 100 s colgado sin
+  conectividad. Se configura timeout corto (~12 s) en el cliente HTTP nombrado.
+- Si falla por timeout/red/configuración, el backend responde error claro y el botón
+  muestra tooltip/mensaje: "Revisa la configuración de IA" (i18n es/en). Sin alert
+  bloqueante; el botón vuelve a estado normal de inmediato.
+
+### 10. Unificación del detalle de playlist en Organizar → Por lista
+
+- Ruta nueva `/organizar/lista/:id` (y `/organize/list/:id`): abre Organizar en modo
+  "Por lista" con esa playlist preseleccionada.
+- En home, el título de cada tarjeta navega a esa ruta (antes `/playlists/{id}`).
+- `/playlists/:id` y `/listas/:id` redirigen a la ruta nueva (compatibilidad).
+- Las acciones del detalle se integran como barra de acciones del modo "Por lista":
+  Buscar repetidas (dentro de la lista, con estrategia mismo video / mismo título),
+  Eliminar repetidas, Ordenar con IA (con su timeout y mensaje de error del punto 9).
+  Los resultados (grupos de duplicados con "conservar esta" / "quitar copia", y la
+  clasificación IA) se muestran en la misma vista.
+- El componente `PlaylistDetail` se elimina. El punto 6 (título del documento) y el
+  tooltip de IA (punto 9) aplican ahora dentro de Organizar cuando hay lista elegida.
+
 ## Componentes afectados
 
 | Capa | Archivo | Cambio |
@@ -91,11 +130,13 @@ con peor UX (requiere Enter). Además:
 | Front | `components/song-search/*` | eliminar |
 | Front | `pages/cross-duplicates/*` | filtros en vivo + scope, badges editables, guardar inline, modal sin una/varias, tag "No disponible" |
 | Front | `pages/playlists/*` | fecha relativa + orden por modificación |
-| Front | `pages/playlist-detail/*` | señal `playlistTitle` desde caché |
+| Front | `pages/playlist-detail/*` | señal `playlistTitle` desde caché; `Title` del documento; tooltip error IA |
 | Front | `models.ts` | `Playlist.lastModifiedUtc?` |
 | Front | i18n `es.json`/`en.json` | claves nuevas; limpiar claves `search.*` huérfanas |
 | Back | `YouTubeService.cs` | filtro `IsUnavailable` en ambas detecciones; `lastModifiedUtc` en playlists |
-| Back | `SongSearchService.cs` | scope real + exclusión no disponibles |
+| Back | `SongSearchService.cs` | scope real + exclusión no disponibles; conteo de repetidas por playlist |
+| Back | `SongsController.cs` | endpoint `duplicate-counts` (cache-only) |
+| Back | `NvidiaClassifier.cs` | timeout HTTP ~12 s + error claro |
 | Back | `DTOs.cs` | `PlaylistDto.LastModifiedUtc?` |
 
 ## Errores y casos borde
@@ -105,6 +146,9 @@ con peor UX (requiere Enter). Además:
 - Canción cuyo único hogar se quita vía badges → `assignSong` con lista vacía es válido
   (remoción total); el flujo staged existente ya lo soporta.
 - Búsqueda con scope `archived` y cero playlists archivadas → resultado vacío, no error.
+- Playlist sin items cacheados → sin conteo de repetidas en el selector (no "0" engañoso).
+- IA sin conectividad/API key → error en ≤12 s con mensaje "Revisa la configuración de IA";
+  nunca cuelga el botón.
 
 ## Pruebas
 

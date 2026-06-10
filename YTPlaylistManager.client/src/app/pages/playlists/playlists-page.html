@@ -47,7 +47,7 @@
 }
 
 <div class="grid">
-  @for (p of playlists(); track p.id) {
+  @for (p of playlistsSorted(); track p.id) {
     <div class="card"
          [class.archived]="p.isArchived || p.queuedForMerge"
          [class.selectable]="!p.isArchived && !p.queuedForMerge"
@@ -59,7 +59,7 @@
         }
       </div>
       <h4 style="margin:8px 0 4px">
-        <a [routerLink]="['/playlists', p.id]" (click)="$event.stopPropagation()">{{ p.title }}</a>
+        <a [routerLink]="['/organizar/lista', p.id]" (click)="$event.stopPropagation()">{{ p.title }}</a>
         @if (p.isArchived) {
           <span class="tag archived-tag" [title]="p.archivedIntoPlaylistTitle ?? ''">
             {{ 'playlists.archived_tag' | translate }}
@@ -81,6 +81,11 @@
           @case ('unlisted') { <span class="tag">{{ 'playlists.privacy_unlisted' | translate }}</span> }
         }
       </div>
+      @if (p.lastModifiedUtc) {
+        <div class="muted" style="font-size:.85em;margin-top:4px">
+          <i class="fa-regular fa-clock"></i> {{ 'playlists.modified' | translate:{ ago: modifiedAgo(p.lastModifiedUtc) } }}
+        </div>
+      }
       @if (p.description) {
         <div class="muted">{{ p.description }}</div>
       }

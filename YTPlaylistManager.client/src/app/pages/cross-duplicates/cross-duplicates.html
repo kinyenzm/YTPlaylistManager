@@ -40,8 +40,26 @@
             <a [href]="'https://www.youtube.com/watch?v=' + g.videoId" target="_blank" rel="noopener">{{ g.title }}</a>
             <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
               <span class="muted">{{ 'cross.appears_in' | translate }}</span>
-              @for (p of g.playlists; track p.playlistId) { <span class="tag">{{ p.playlistTitle }}</span> }
+              @for (p of g.playlists; track p.playlistId) {
+                <span class="tag badge-edit" [class.staged-out]="removedSet(g.videoId).has(p.playlistId)">
+                  {{ p.playlistTitle }}
+                  <button type="button" class="badge-x"
+                          (click)="$event.stopPropagation(); toggleRemoval(g.videoId, p.playlistId)"
+                          [title]="(removedSet(g.videoId).has(p.playlistId) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
+                    @if (removedSet(g.videoId).has(p.playlistId)) { <i class="fa-solid fa-rotate-left"></i> }
+                    @else { <i class="fa-solid fa-xmark"></i> }
+                  </button>
+                </span>
+              }
             </div>
+            @if (removedSet(g.videoId).size > 0) {
+              <div class="row" style="gap:8px;margin-top:8px">
+                <button (click)="saveCard(g.videoId, g.title, playlistIdsOf(g))" [disabled]="applying()">
+                  {{ 'cross.save_changes' | translate:{ n: removedSet(g.videoId).size } }}
+                </button>
+                <button class="secondary" (click)="discardCard(g.videoId)">{{ 'common.cancel' | translate }}</button>
+              </div>
+            }
           </div>
           <button class="secondary" (click)="openEditor({ videoId: g.videoId, title: g.title })">
             {{ 'cross.assign_open' | translate }}
@@ -52,61 +70,174 @@
   }
 }
 
-<!-- ── Modo: Por lista ── -->
+<!-- ── Modo: Por lista (absorbe el viejo detalle de playlist) ── -->
 @if (mode() === 'byList') {
-  <div class="row" style="margin-top:12px">
+  <div class="row" style="margin-top:12px;align-items:center;gap:8px">
     <label class="muted">{{ 'cross.pick_list' | translate }}</label>
-    <select [ngModel]="listId()" (ngModelChange)="pickList($event)">
+    <select [ngModel]="listId()" (ngModelChange)="pickList($event)" style="flex:1">
       <option value="">—</option>
       @for (pl of allPlaylists(); track pl.id) {
-        <option [value]="pl.id">{{ pl.title }} ({{ pl.itemCount }})</option>
+        <option [value]="pl.id">{{ optionLabel(pl) }}</option>
       }
     </select>
+    @if (listId() && (dupCounts()[listId()] ?? 0) > 0) {
+      <span class="dup-badge" [title]="'cross.dups_in_list' | translate:{ n: dupCounts()[listId()] }">{{ dupCounts()[listId()] }}</span>
+    }
   </div>
 
-  @if (listId() && listItems().length > 0) {
-    @if (bulkSelected().size > 0) {
-      <div class="card" style="border-color:var(--accent);margin-top:10px">
-        <div class="row" style="justify-content:space-between">
-          <strong>{{ 'cross.bulk_selected' | translate:{ n: bulkSelected().size } }}</strong>
-          <button class="danger" (click)="removeBulk()">{{ 'cross.bulk_remove' | translate }}</button>
-        </div>
+  @if (listId()) {
+    <!-- Herramientas de la lista (antes vivían en el detalle de playlist) -->
+    <div class="card" style="margin-top:12px">
+      <strong>{{ 'detail.actions' | translate }}</strong>
+      <div class="row toolbar" style="margin-top:8px">
+        <button (click)="loadDuplicates()" [disabled]="loadingDup()">{{ 'detail.find_dup' | translate }}</button>
+        <select [ngModel]="strategy()" (ngModelChange)="strategy.set($event)">
+          <option value="videoId">{{ 'detail.strategy_videoId' | translate }}</option>
+          <option value="normalizedTitle">{{ 'detail.strategy_normalizedTitle' | translate }}</option>
+        </select>
+        <button class="secondary danger" (click)="cleanDuplicates()" [disabled]="cleaning()">
+          {{ 'detail.remove_dup' | translate }}
+        </button>
+
+        <select [ngModel]="aiMode()" (ngModelChange)="aiMode.set($event)">
+          <option value="genre">{{ 'detail.mode_genre' | translate }}</option>
+          <option value="mood">{{ 'detail.mode_mood' | translate }}</option>
+          <option value="decade">{{ 'detail.mode_decade' | translate }}</option>
+        </select>
+        <button (click)="classify()" [disabled]="classifying()" [title]="aiError() ?? ''">{{ 'detail.classify' | translate }}</button>
+        @if (aiError(); as ae) {
+          <span class="tag" style="background:var(--accent);color:#fff" role="alert">{{ ae }}</span>
+        }
       </div>
-    }
-    @for (it of listItemsSorted(); track it.playlistItemId) {
-      <div class="card selectable" [class.selected]="bulkSelected().has(it.videoId)" (click)="toggleBulk(it.videoId)">
-        <div class="row" style="align-items:flex-start;gap:8px">
-          <input type="checkbox" [checked]="bulkSelected().has(it.videoId)"
-                 (click)="$event.stopPropagation()" (change)="toggleBulk(it.videoId)" />
-          <img [src]="it.thumbnailUrl || thumb(it.videoId)" class="thumb" alt="" />
-          <div style="flex:1">
-            <div>{{ it.title }}</div>
-            <div class="muted">{{ it.channelTitle }}</div>
-            @if (listsFor(it.videoId).length) {
-              <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
-                <span class="muted">{{ 'cross.appears_in' | translate }}</span>
-                @for (t of listsFor(it.videoId); track t) { <span class="tag">{{ t }}</span> }
+    </div>
+
+    @if (duplicates(); as dup) {
+      <div class="card">
+        <strong>{{ 'detail.dup_summary' | translate:{ count: dup.duplicateCount, total: dup.totalItems } }}</strong>
+        @if (dup.duplicateCount > 0) {
+          <p class="muted" style="margin:4px 0 0">{{ 'detail.dup_action_hint' | translate }}</p>
+        }
+        @if (stagedMsg(); as sm) {
+          <p class="accent" style="margin:6px 0 0">{{ sm }}</p>
+        }
+        @for (g of dupGroupsSorted(); track g.key) {
+          <div style="margin-top:10px">
+            <div class="tag">{{ g.matchType === 'videoId' ? ('detail.match_videoId' | translate) : ('detail.match_normalizedTitle' | translate) }}</div>
+            @for (it of g.items; track it.playlistItemId) {
+              <div class="row" style="margin-top:4px;align-items:center;gap:8px">
+                @if (it.thumbnailUrl) {
+                  <img [src]="it.thumbnailUrl" class="thumb" alt="" />
+                }
+                <div style="flex:1">
+                  <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + listId()" target="_blank" rel="noopener">{{ it.title }}</a>
+                  <div class="muted">#{{ it.position }} · {{ it.channelTitle }}</div>
+                </div>
+                @if (g.items.length > 1) {
+                  <button class="secondary" (click)="keepThis(g.items, it.playlistItemId)">{{ 'detail.dup_keep_this' | translate }}</button>
+                }
+                <button class="secondary danger" (click)="removeCopy(it)">{{ 'detail.dup_remove_copy' | translate }}</button>
               </div>
             }
           </div>
-          <button class="secondary" (click)="$event.stopPropagation(); openEditor({ videoId: it.videoId, title: it.title })">
-            {{ 'cross.assign_open' | translate }}
-          </button>
-        </div>
+        }
       </div>
     }
-  } @else if (listId()) {
+
+    @if (classification(); as cls) {
+      <div class="card">
+        <strong>{{ 'detail.classified' | translate:{ mode: (cls.mode === 'genre' ? ('detail.mode_label_genre' | translate) : (cls.mode === 'mood' ? ('detail.mode_label_mood' | translate) : ('detail.mode_label_decade' | translate))) } }}</strong>
+        @for (key of classKeys(); track key) {
+          <div style="margin-top:10px">
+            <h4 style="margin:6px 0">{{ key }} ({{ cls.groups[key].length }})</h4>
+            <ul style="margin:0; padding-left:18px">
+              @for (s of cls.groups[key]; track s.videoId) {
+                <li>{{ s.title }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  @if (listId() && listItems().length > 0) {
+    <div style="margin-top:12px">
+      @for (it of listItemsSorted(); track it.playlistItemId) {
+        <div class="card">
+          <div class="row" style="align-items:flex-start;gap:8px">
+            <img [src]="it.thumbnailUrl || thumb(it.videoId)" class="thumb" alt="" />
+            <div style="flex:1">
+              <div>
+                <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + listId()" target="_blank" rel="noopener">{{ it.title }}</a>
+                @if (isUnavailable(it.title)) {
+                  <span class="tag" style="background:var(--accent);color:#fff">{{ 'cross.unavailable_tag' | translate }}</span>
+                }
+              </div>
+              <div class="muted">{{ it.channelTitle }}</div>
+              @if (refsFor(locMap()[it.videoId] ?? []).length) {
+                <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+                  <span class="muted">{{ 'cross.appears_in' | translate }}</span>
+                  <!-- Videos privados/borrados: solo lectura — YouTube no permite gestionarlos
+                       sin acceso al video; edición pendiente de una futura configuración. -->
+                  @if (isUnavailable(it.title)) {
+                    @for (ref of refsFor(locMap()[it.videoId] ?? []); track ref.id) {
+                      <span class="tag">{{ ref.title }}</span>
+                    }
+                  } @else {
+                    @for (ref of refsFor(locMap()[it.videoId] ?? []); track ref.id) {
+                      <span class="tag badge-edit" [class.staged-out]="removedSet(it.videoId).has(ref.id)">
+                        {{ ref.title }}
+                        <button type="button" class="badge-x"
+                                (click)="$event.stopPropagation(); toggleRemoval(it.videoId, ref.id)"
+                                [title]="(removedSet(it.videoId).has(ref.id) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
+                          @if (removedSet(it.videoId).has(ref.id)) { <i class="fa-solid fa-rotate-left"></i> }
+                          @else { <i class="fa-solid fa-xmark"></i> }
+                        </button>
+                      </span>
+                    }
+                  }
+                </div>
+              }
+              @if (removedSet(it.videoId).size > 0) {
+                <div class="row" style="gap:8px;margin-top:8px">
+                  <button (click)="$event.stopPropagation(); saveCard(it.videoId, it.title, locMap()[it.videoId] ?? [])" [disabled]="applying()">
+                    {{ 'cross.save_changes' | translate:{ n: removedSet(it.videoId).size } }}
+                  </button>
+                  <button class="secondary" (click)="$event.stopPropagation(); discardCard(it.videoId)">{{ 'common.cancel' | translate }}</button>
+                </div>
+              }
+            </div>
+            @if (!isUnavailable(it.title)) {
+              <button class="secondary" (click)="$event.stopPropagation(); openEditor({ videoId: it.videoId, title: it.title })">
+                {{ 'cross.assign_open' | translate }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  } @else if (listId() && !loading()) {
     <div class="card" style="margin-top:10px">{{ 'cross.empty_list' | translate }}</div>
   }
 }
 
-<!-- ── Modo: Por canción ── -->
+<!-- ── Modo: Por canción (fusión de /buscar: filtros en vivo) ── -->
 @if (mode() === 'bySong') {
-  <div class="row" style="margin-top:12px">
-    <input type="text" [ngModel]="term()" (ngModelChange)="term.set($event)" (keyup.enter)="search()"
-           [placeholder]="'cross.search_ph' | translate" style="flex:1" />
-    <button (click)="search()" [disabled]="loading()">{{ 'cross.search_btn' | translate }}</button>
+  <div class="row toolbar" style="margin-top:12px">
+    <input type="text" [ngModel]="nameInput()" (ngModelChange)="nameInput.set($event); onFilterChange()"
+           (keyup.enter)="search()" [placeholder]="'cross.filter_name_ph' | translate" style="flex:2;min-width:200px" />
+    <input type="text" [ngModel]="idInput()" (ngModelChange)="idInput.set($event); onFilterChange()"
+           (keyup.enter)="search()" [placeholder]="'cross.filter_id_ph' | translate" style="flex:1;min-width:140px" />
+    <select [ngModel]="searchScope()" (ngModelChange)="searchScope.set($event); onFilterChange()">
+      <option value="all">{{ 'cross.scope_all' | translate }}</option>
+      <option value="active">{{ 'cross.scope_active' | translate }}</option>
+      <option value="archived">{{ 'cross.scope_archived' | translate }}</option>
+    </select>
   </div>
+
+  @if (searching()) {
+    <p class="muted" style="margin-top:12px">{{ 'common.loading' | translate }}</p>
+  }
 
   @if (results().length > 0) {
     <p class="muted" style="margin-top:12px">{{ 'cross.results_count' | translate:{ n: results().length } }}</p>
@@ -115,12 +246,30 @@
         <div class="row" style="align-items:flex-start;gap:8px">
           <img [src]="thumb(r.videoId)" class="thumb" alt="" />
           <div style="flex:1">
-            <div>{{ r.title }}</div>
+            <div><a [href]="'https://www.youtube.com/watch?v=' + r.videoId" target="_blank" rel="noopener">{{ r.title }}</a></div>
             <div class="muted">{{ r.channelTitle }}</div>
             <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
               <span class="muted">{{ 'cross.appears_in' | translate }}</span>
-              @for (t of titlesOf(r.appearsInPlaylistIds); track t) { <span class="tag">{{ t }}</span> }
+              @for (ref of refsFor(r.appearsInPlaylistIds); track ref.id) {
+                <span class="tag badge-edit" [class.staged-out]="removedSet(r.videoId).has(ref.id)">
+                  {{ ref.title }}
+                  <button type="button" class="badge-x"
+                          (click)="$event.stopPropagation(); toggleRemoval(r.videoId, ref.id)"
+                          [title]="(removedSet(r.videoId).has(ref.id) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
+                    @if (removedSet(r.videoId).has(ref.id)) { <i class="fa-solid fa-rotate-left"></i> }
+                    @else { <i class="fa-solid fa-xmark"></i> }
+                  </button>
+                </span>
+              }
             </div>
+            @if (removedSet(r.videoId).size > 0) {
+              <div class="row" style="gap:8px;margin-top:8px">
+                <button (click)="saveCard(r.videoId, r.title, r.appearsInPlaylistIds)" [disabled]="applying()">
+                  {{ 'cross.save_changes' | translate:{ n: removedSet(r.videoId).size } }}
+                </button>
+                <button class="secondary" (click)="discardCard(r.videoId)">{{ 'common.cancel' | translate }}</button>
+              </div>
+            }
           </div>
           <button class="secondary" (click)="openEditor({ videoId: r.videoId, title: r.title })">
             {{ 'cross.assign_open' | translate }}
@@ -128,10 +277,14 @@
         </div>
       </div>
     }
+  } @else if (!searching() && (nameInput().trim() || idInput().trim())) {
+    <div class="card" style="margin-top:10px">{{ 'cross.no_results' | translate }}</div>
+  } @else if (!searching()) {
+    <p class="muted" style="margin-top:12px">{{ 'cross.search_intro' | translate }}</p>
   }
 }
 
-<!-- ── Editor de asignación (modal compartido) ── -->
+<!-- ── Editor de asignación (modal: agregar a listas nuevas, multi-selección) ── -->
 @if (editingVideoId()) {
   <div class="modal-backdrop" (click)="closeEditor()">
     <div class="modal" (click)="$event.stopPropagation()" style="max-width:540px;max-height:84vh;overflow:auto">
@@ -140,13 +293,6 @@
       @if (editorLoading()) {
         <div class="muted">{{ 'common.loading' | translate }}</div>
       } @else {
-        <div class="row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-          <span class="muted">{{ 'cross.mode_label' | translate }}</span>
-          <div class="segmented">
-            <button [class.active]="!singleMode()" (click)="setSingle(false)">{{ 'cross.mode_multi' | translate }}</button>
-            <button [class.active]="singleMode()" (click)="setSingle(true)">{{ 'cross.mode_single' | translate }}</button>
-          </div>
-        </div>
         <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:6px">
           @for (pl of editorPlaylists(); track pl.id) {
             <label class="opt-row" [class.on]="isChecked(pl.id)">
@@ -168,10 +314,15 @@
   </div>
 }
 
-@if (loading()) {
+@if (loading() || loadingDup() || cleaning() || classifying()) {
   <div class="busy-overlay">
     <div class="busy-card">
-      <h4>{{ 'cross.busy_title' | translate }}</h4>
+      <h4>
+        @if (cleaning()) { {{ 'detail.busy_cleaning' | translate }} }
+        @else if (classifying()) { {{ 'detail.busy_classifying' | translate }} }
+        @else if (loadingDup()) { {{ 'detail.busy_finding' | translate }} }
+        @else { {{ 'cross.busy_title' | translate }} }
+      </h4>
       <div class="progress indeterminate"><div class="bar"></div></div>
       <p class="muted" style="margin:12px 0 0">{{ 'cross.busy_desc' | translate }}</p>
     </div>

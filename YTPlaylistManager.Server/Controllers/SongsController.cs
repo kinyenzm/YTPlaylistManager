@@ -52,6 +52,13 @@ public class SongsController : ControllerBase
         }
     }
 
+    /// <summary>Por playlist: cuántas canciones (videos disponibles) están también en otra lista. 100% caché, 0 cuota.</summary>
+    [HttpGet("duplicate-counts")]
+    [RequireGoogleSession]
+    [ProducesResponseType<Dictionary<string, int>>(StatusCodes.Status200OK)]
+    public IActionResult DuplicateCounts()
+        => Ok(_searchService.GetDuplicateCountsByPlaylist());
+
     // ── Asignar una canción a varias/una playlist (staged: local → pendiente → subir) ──
 
     /// <summary>Aplica en local la reasignación de una canción y la deja pendiente de subir.</summary>

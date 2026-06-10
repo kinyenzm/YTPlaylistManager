@@ -16,6 +16,9 @@ public interface ISongSearchService
     /// <summary>Búsqueda combinada (unión de videoId y nombre).</summary>
     List<SongSearchResultDto> SearchCombined(string? videoIdPartial, string? songNameFuzzy, string searchScope);
 
+    /// <summary>Por playlist: cuántos videos (disponibles) aparecen también en otra lista.</summary>
+    Dictionary<string, int> GetDuplicateCountsByPlaylist();
+
     /// <summary>Historial/ubicaciones de una canción (derivado de la caché).</summary>
     SongMovementLogDto? GetSongTimeline(string videoId);
 
@@ -35,15 +38,18 @@ public class SongSearchService : ISongSearchService
 
     private readonly PlaylistCacheStore _cacheStore;
     private readonly PlaylistItemsCacheStore _itemsCache;
+    private readonly ArchivedPlaylistsStore _archivedStore;
     private readonly ILogger<SongSearchService> _logger;
 
     public SongSearchService(
         PlaylistCacheStore cacheStore,
         PlaylistItemsCacheStore itemsCache,
+        ArchivedPlaylistsStore archivedStore,
         ILogger<SongSearchService> logger)
     {
         _cacheStore = cacheStore;
         _itemsCache = itemsCache;
+        _archivedStore = archivedStore;
         _logger = logger;
     }
 
@@ -61,7 +67,12 @@ public class SongSearchService : ISongSearchService
             var items = _itemsCache.Load(cache.UserKey, pl.Id);
             if (items is null) continue; // playlist aún no escaneada → sin items en caché
             foreach (var it in items)
+            {
+                // Videos privados/eliminados: fuera de búsquedas y del índice de apariciones
+                // (no deben inflar AppearsInCount ni marcar duplicados falsos).
+                if (VideoAvailability.IsUnavailable(it.Title)) continue;
                 flat.Add(new FlatItem(pl.Id, pl.Title, it));
+            }
         }
         return flat;
     }
@@ -127,11 +138,34 @@ public class SongSearchService : ISongSearchService
         var byName = string.IsNullOrWhiteSpace(songNameFuzzy) ? [] : SearchByName(songNameFuzzy);
 
         // Unión sin repetir la misma ocurrencia (videoId + playlist).
-        return byId
+        var union = byId
             .Concat(byName)
             .GroupBy(r => (r.VideoId, r.CurrentPlaylistId))
-            .Select(g => g.First())
-            .ToList();
+            .Select(g => g.First());
+
+        // Scope sobre la playlist donde está la ocurrencia: active = no archivadas,
+        // archived = solo archivadas, all (o valor desconocido) = sin filtro.
+        var scope = (searchScope ?? "all").ToLowerInvariant();
+        if (scope is "active" or "archived")
+        {
+            var archivedIds = _archivedStore.LoadAll().Select(e => e.Id).ToHashSet();
+            union = scope == "active"
+                ? union.Where(r => r.CurrentPlaylistId is null || !archivedIds.Contains(r.CurrentPlaylistId))
+                : union.Where(r => r.CurrentPlaylistId is not null && archivedIds.Contains(r.CurrentPlaylistId));
+        }
+
+        return union.ToList();
+    }
+
+    public Dictionary<string, int> GetDuplicateCountsByPlaylist()
+    {
+        var flat = LoadAllCachedItems();
+        var appearance = AppearanceIndex(flat);
+        return flat
+            .Where(x => !string.IsNullOrEmpty(x.Item.VideoId)
+                        && appearance.TryGetValue(x.Item.VideoId, out var ids) && ids.Count > 1)
+            .GroupBy(x => x.PlaylistId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Item.VideoId).Distinct().Count());
     }
 
     public SongMovementLogDto? GetSongTimeline(string videoId)

@@ -11,6 +11,9 @@ builder.Services.AddControllers()
 
 builder.Services.AddOpenApi();
 builder.Services.AddHttpClient();
+// Cliente del clasificador IA: timeout corto para que "Ordenar con IA" no quede
+// colgado sin conectividad (el default de HttpClient es 100 s).
+builder.Services.AddHttpClient("nvidia", c => c.Timeout = TimeSpan.FromSeconds(12));
 
 builder.Services.AddSingleton<GoogleTokenStore>();
 builder.Services.AddSingleton<OperationLog>();
@@ -20,6 +23,7 @@ builder.Services.AddSingleton<PendingSongMoveStore>();
 builder.Services.AddSingleton<QuotaTracker>();
 builder.Services.AddSingleton<ActivityBroadcaster>();
 builder.Services.AddSingleton<ArchivedPlaylistsStore>();
+builder.Services.AddSingleton<PlaylistTouchStore>();
 builder.Services.AddSingleton<PlaylistCacheStore>();
 builder.Services.AddSingleton<PlaylistItemsCacheStore>();
 builder.Services.AddSingleton<ApiKeyPool>();

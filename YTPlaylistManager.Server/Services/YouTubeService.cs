@@ -27,6 +27,7 @@ public class YouTubeService : IYouTubeService
     private readonly QuotaTracker _quota;
     private readonly ActivityBroadcaster _activity;
     private readonly ApiKeyPool _apiKeyPool;
+    private readonly PlaylistTouchStore _touchStore;
     private readonly ILogger<YouTubeService> _logger;
 
     public YouTubeService(
@@ -42,6 +43,7 @@ public class YouTubeService : IYouTubeService
         QuotaTracker quota,
         ActivityBroadcaster activity,
         ApiKeyPool apiKeyPool,
+        PlaylistTouchStore touchStore,
         ILogger<YouTubeService> logger)
     {
         _cfg = cfg;
@@ -56,6 +58,7 @@ public class YouTubeService : IYouTubeService
         _quota = quota;
         _activity = activity;
         _apiKeyPool = apiKeyPool;
+        _touchStore = touchStore;
         _logger = logger;
     }
 
@@ -77,6 +80,16 @@ public class YouTubeService : IYouTubeService
         var reason = ex.Error?.Errors?.FirstOrDefault()?.Reason;
         return reason is "quotaExceeded" or "rateLimitExceeded" or "dailyLimitExceeded"
             || (ex.Message?.Contains("quota", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    /// <summary>Anota la última modificación local registrada (PlaylistTouchStore).</summary>
+    private List<PlaylistDto> AnnotateTouched(List<PlaylistDto> source)
+    {
+        var touched = _touchStore.LoadAll();
+        if (touched.Count == 0) return source;
+        return source
+            .Select(p => touched.TryGetValue(p.Id, out var at) ? p with { LastModifiedUtc = at } : p)
+            .ToList();
     }
 
     /// <summary>Marca las playlists que son origen de un cambio pendiente (en cola de unir).</summary>
@@ -152,7 +165,7 @@ public class YouTubeService : IYouTubeService
 
         // Caché de la misma cuenta y sin pedir refrescar → servimos del archivo (0 cuota).
         if (!forceRefresh && cache is not null && cache.UserKey == userKey)
-            return AnnotateQueued(AnnotateArchived(cache.Playlists, includeArchived));
+            return AnnotateTouched(AnnotateQueued(AnnotateArchived(cache.Playlists, includeArchived)));
 
         try
         {
@@ -186,7 +199,7 @@ public class YouTubeService : IYouTubeService
 
             var ordered = result.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToList();
             _cacheStore.Save(new PlaylistCache { UserKey = userKey, CachedAtUtc = DateTime.UtcNow, Playlists = ordered });
-            return AnnotateQueued(AnnotateArchived(ordered, includeArchived));
+            return AnnotateTouched(AnnotateQueued(AnnotateArchived(ordered, includeArchived)));
         }
         catch (Google.GoogleApiException ex)
         {
@@ -194,7 +207,7 @@ public class YouTubeService : IYouTubeService
             if (cache is not null && cache.UserKey == userKey)
             {
                 _logger.LogWarning(ex, "Fallo al listar playlists ({Status}); usando caché.", ex.HttpStatusCode);
-                return AnnotateQueued(AnnotateArchived(cache.Playlists, includeArchived));
+                return AnnotateTouched(AnnotateQueued(AnnotateArchived(cache.Playlists, includeArchived)));
             }
             throw;
         }
@@ -311,7 +324,7 @@ public class YouTubeService : IYouTubeService
 
         // Por videoId
         foreach (var g in items
-                     .Where(x => !string.IsNullOrEmpty(x.VideoId))
+                     .Where(x => !string.IsNullOrEmpty(x.VideoId) && !VideoAvailability.IsUnavailable(x.Title))
                      .GroupBy(x => x.VideoId)
                      .Where(g => g.Count() > 1))
         {
@@ -321,6 +334,7 @@ public class YouTubeService : IYouTubeService
         // Por título normalizado (capta "misma canción con distinto video")
         var alreadyFlagged = new HashSet<string>(groups.SelectMany(g => g.Items).Select(i => i.PlaylistItemId));
         foreach (var g in items
+                     .Where(x => !VideoAvailability.IsUnavailable(x.Title))
                      .GroupBy(x => Normalize(x.Title))
                      .Where(g => g.Count() > 1 && !string.IsNullOrWhiteSpace(g.Key)))
         {
@@ -361,6 +375,7 @@ public class YouTubeService : IYouTubeService
             foreach (var it in items)
             {
                 if (string.IsNullOrEmpty(it.VideoId)) continue;
+                if (VideoAvailability.IsUnavailable(it.Title)) continue;
                 if (!map.TryGetValue(it.VideoId, out var entry))
                 {
                     entry = (it.Title, new Dictionary<string, string>());
@@ -427,6 +442,7 @@ public class YouTubeService : IYouTubeService
         toKeep = toKeep.OrderBy(x => x.Position).ToList();
 
         _itemsCache.Save(userKey, req.PlaylistId, toKeep);
+        _touchStore.Touch(req.PlaylistId);
         _log.Add("RemoveDuplicates", $"playlist={req.PlaylistId} strategy={req.Strategy} removed={removed} kept={kept} (local)");
         return new RemoveDuplicatesResultDto(req.PlaylistId, removed, kept);
     }
@@ -599,6 +615,8 @@ public class YouTubeService : IYouTubeService
             });
         }
 
+        if (added > 0 || sourcesUsed.Count > 0)
+            _touchStore.Touch(targetId);
         _log.Add("Merge(local)", $"sources={string.Join(",", req.SourcePlaylistIds)} target={targetId} staged={added} skipped={skipped} pendingId={pendingId}");
 
         return Task.FromResult(new MergePlaylistsResultDto(
@@ -873,6 +891,7 @@ public class YouTubeService : IYouTubeService
             CreatedAtUtc = DateTime.UtcNow,
         };
         _songMoves.Add(move);
+        _touchStore.Touch(addTo.Select(t => t.PlaylistId).Concat(removeFrom.Select(r => r.PlaylistId)));
         _log.Add("SongAssign(local)", $"video={req.VideoId} add={addTo.Count} remove={removeFrom.Count} id={move.Id}");
         return ToDto(move);
     }
@@ -1065,6 +1084,7 @@ public class YouTubeService : IYouTubeService
         if (removedItemIds.Count > 0)
             _itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());
 
+        if (staged > 0) _touchStore.Touch(playlistId);
         _log.Add("RemoveFromList(local)", $"playlist={playlistId} staged={staged}");
         return staged;
     }
@@ -1104,6 +1124,7 @@ public class YouTubeService : IYouTubeService
         if (removedItemIds.Count > 0)
             _itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());
 
+        if (staged > 0) _touchStore.Touch(playlistId);
         _log.Add("RemoveItems(local)", $"playlist={playlistId} staged={staged}");
         return staged;
     }

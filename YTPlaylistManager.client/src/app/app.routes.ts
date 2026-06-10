@@ -2,12 +2,8 @@ import { Routes } from '@angular/router';
 
 // Cada pantalla se registra en español y en inglés (ambas URLs resuelven al mismo
 // componente). El menú usa la ruta del idioma activo (ver app.ts -> navPaths()).
-const playlistDetail = () =>
-  import('./pages/playlist-detail/playlist-detail').then((m) => m.PlaylistDetail);
 const crossDuplicates = () =>
   import('./pages/cross-duplicates/cross-duplicates').then((m) => m.CrossDuplicates);
-const songSearch = () =>
-  import('./components/song-search/song-search').then((m) => m.SongSearch);
 const cacheExplorer = () =>
   import('./components/cache-explorer/cache-explorer').then((m) => m.CacheExplorer);
 
@@ -18,20 +14,21 @@ export const routes: Routes = [
       import('./pages/playlists/playlists-page').then((m) => m.PlaylistsPage),
   },
 
-  // Detalle de lista
-  { path: 'listas/:id', loadComponent: playlistDetail },
-  { path: 'playlists/:id', loadComponent: playlistDetail },
-
-  // Organizar canciones (repetidas / por lista / por canción)
+  // Organizar canciones (repetidas / por lista / por canción). La vista "por lista"
+  // con :id absorbe el viejo detalle de playlist.
   { path: 'organizar', loadComponent: crossDuplicates },
   { path: 'organize', loadComponent: crossDuplicates },
+  { path: 'organizar/lista/:id', loadComponent: crossDuplicates },
+  { path: 'organize/list/:id', loadComponent: crossDuplicates },
   // alias viejos
   { path: 'repetidas', redirectTo: 'organizar', pathMatch: 'full' },
   { path: 'duplicates', redirectTo: 'organize', pathMatch: 'full' },
+  { path: 'listas/:id', redirectTo: 'organizar/lista/:id' },
+  { path: 'playlists/:id', redirectTo: 'organizar/lista/:id' },
 
-  // Buscar canción / search
-  { path: 'buscar', loadComponent: songSearch },
-  { path: 'search', loadComponent: songSearch },
+  // Buscar canción → fusionado en el organizador (modo "por canción")
+  { path: 'buscar', redirectTo: 'organizar', pathMatch: 'full' },
+  { path: 'search', redirectTo: 'organize', pathMatch: 'full' },
 
   // Datos guardados / data (cache)
   { path: 'datos', loadComponent: cacheExplorer },

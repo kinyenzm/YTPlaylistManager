@@ -13,7 +13,8 @@ public record PlaylistDto(
     string? ArchivedIntoPlaylistId = null,
     string? ArchivedIntoPlaylistTitle = null,
     bool QueuedForMerge = false,      // en cola: sus canciones ya se unieron (local); se borrará al subir
-    string? QueuedIntoTitle = null
+    string? QueuedIntoTitle = null,
+    DateTime? LastModifiedUtc = null  // última acción local sobre la lista (PlaylistTouchStore)
 );
 
 public record PlaylistItemDto(

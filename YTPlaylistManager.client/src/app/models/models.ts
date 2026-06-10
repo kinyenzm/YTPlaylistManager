@@ -10,6 +10,7 @@ export interface Playlist {
   archivedIntoPlaylistTitle?: string | null;
   queuedForMerge?: boolean;
   queuedIntoTitle?: string | null;
+  lastModifiedUtc?: string | null;   // última acción local sobre la lista
 }
 
 export interface PlaylistItem {

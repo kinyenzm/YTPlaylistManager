@@ -123,6 +123,9 @@ export class ApiService {
   searchSongs(query: SongSearchQuery): Observable<SongSearchResult[]> {
     return this.http.post<SongSearchResult[]>(`${this.base}/songs/search`, query);
   }
+  duplicateCounts(): Observable<Record<string, number>> {
+    return this.http.get<Record<string, number>>(`${this.base}/songs/duplicate-counts`);
+  }
 
   // --- Cache Management ---
   getCacheStatus(): Observable<CacheStatus> {

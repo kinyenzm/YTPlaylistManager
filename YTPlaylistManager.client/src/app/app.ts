@@ -47,7 +47,6 @@ function detectInitialLang(): Lang {
         }
         <app-lang-switcher />
         @if (status()?.isAuthenticated) {
-          <a [routerLink]="navPaths().search">{{ 'app.nav.search' | translate }}</a>
           <a [routerLink]="navPaths().cross">{{ 'app.nav.cross_dups' | translate }}</a>
           <a [routerLink]="navPaths().cache">{{ 'app.nav.cache' | translate }}</a>
           <span class="muted">{{ 'app.nav.connected' | translate }}</span>
@@ -76,7 +75,6 @@ export class App implements OnInit {
   protected readonly navPaths = computed(() => {
     const es = this.lang().startsWith('es');
     return {
-      search: es ? '/buscar' : '/search',
       cross: es ? '/organizar' : '/organize',
       cache: es ? '/datos' : '/data',
     };

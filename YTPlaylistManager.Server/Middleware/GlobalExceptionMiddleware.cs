@@ -36,6 +36,12 @@ public sealed class GlobalExceptionMiddleware(RequestDelegate next, ILogger<Glob
             logger.LogWarning(ex, "Error de la API de YouTube ({Status}): {Message}", status, ex.Message);
             await WriteErrorResponse(context, status, ex.Error?.Message ?? "Error de la API de YouTube.");
         }
+        catch (AiUnavailableException ex)
+        {
+            // El frontend muestra "Revisa la configuración de IA" al recibir 503 del classify.
+            logger.LogWarning(ex, "IA no disponible: {Message}", ex.Message);
+            await WriteErrorResponse(context, HttpStatusCode.ServiceUnavailable, ex.Message);
+        }
         catch (HttpRequestException ex)
         {
             logger.LogError(ex, "Error al comunicarse con servicio externo");

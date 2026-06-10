@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using YTPlaylistManager.Server.Domain.Exceptions;
 using YTPlaylistManager.Server.DTOs;
 
 namespace YTPlaylistManager.Server.Services;
@@ -44,8 +45,8 @@ public class NvidiaClassifier : IAiClassifier
 
         if (string.IsNullOrWhiteSpace(apiKey) || apiKey.StartsWith("TU_"))
         {
-            _logger.LogWarning("Sin API key de NVIDIA configurada (Ai:NvidiaApiKey). Usando fallback heurístico.");
-            return HeuristicClassify(list);
+            _logger.LogWarning("Sin API key de NVIDIA configurada (Ai:NvidiaApiKey).");
+            throw new AiUnavailableException("Falta la API key de NVIDIA (Ai:NvidiaApiKey).");
         }
 
         // 1. Armar la lista de modelos a intentar (Principal + Alternativos)
@@ -64,7 +65,7 @@ public class NvidiaClassifier : IAiClassifier
         }
 
         var prompt = BuildPrompt(list, mode);
-        var http = _httpFactory.CreateClient();
+        var http = _httpFactory.CreateClient("nvidia");
         http.BaseAddress = new Uri(baseUrl);
         http.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
@@ -125,9 +126,10 @@ public class NvidiaClassifier : IAiClassifier
             }
         }
 
-        // 3. Fallback crítico final (Si todos los modelos fallaron)
-        _logger.LogError("Todos los modelos del catálogo de NVIDIA fallaron o no están disponibles. Aplicando fallback heurístico por canales.");
-        return HeuristicClassify(list);
+        // 3. Todos los modelos fallaron (red caída, timeout, modelos no disponibles):
+        // error explícito para que la UI avise en vez de devolver una clasificación falsa.
+        _logger.LogError("Todos los modelos del catálogo de NVIDIA fallaron o no están disponibles.");
+        throw new AiUnavailableException("Ningún modelo de IA respondió (revisa conectividad y configuración).");
     }
 
     private static string BuildPrompt(List<PlaylistItemDto> items, string mode)
@@ -187,13 +189,4 @@ public class NvidiaClassifier : IAiClassifier
         return result;
     }
 
-    private static Dictionary<string, List<ClassifiedSongDto>> HeuristicClassify(List<PlaylistItemDto> items)
-    {
-        var groups = items
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.ChannelTitle) ? "Otros" : x.ChannelTitle!)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(x => new ClassifiedSongDto(x.VideoId, x.Title, g.Key)).ToList());
-        return groups;
-    }
 }

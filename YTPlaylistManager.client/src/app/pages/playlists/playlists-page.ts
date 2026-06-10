@@ -60,6 +60,27 @@ export class PlaylistsPage implements OnInit {
     this.playlists().filter((p) => !p.isArchived),
   );
 
+  // Recientes primero (acción local registrada); sin fecha → después, en el
+  // orden alfabético que ya trae el backend.
+  protected readonly playlistsSorted = computed<Playlist[]>(() =>
+    [...this.playlists()].sort((a, b) => {
+      const ta = a.lastModifiedUtc ? Date.parse(a.lastModifiedUtc) : 0;
+      const tb = b.lastModifiedUtc ? Date.parse(b.lastModifiedUtc) : 0;
+      if (ta !== tb) return tb - ta;
+      return a.title.localeCompare(b.title);
+    }),
+  );
+
+  modifiedAgo(iso: string): string {
+    const ms = Date.parse(iso) - Date.now();
+    const rtf = new Intl.RelativeTimeFormat(this.translate.currentLang || 'es', { numeric: 'auto' });
+    const minutes = Math.round(ms / 60000);
+    if (Math.abs(minutes) < 60) return rtf.format(minutes, 'minute');
+    const hours = Math.round(minutes / 60);
+    if (Math.abs(hours) < 24) return rtf.format(hours, 'hour');
+    return rtf.format(Math.round(hours / 24), 'day');
+  }
+
   protected readonly authChecked = signal(false);
   protected readonly authenticated = signal(false);
 
