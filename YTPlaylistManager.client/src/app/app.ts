@@ -12,6 +12,7 @@ import { ApiService } from './services/api.service';
 import { AuthStatus } from './models/models';
 import { LangSwitcher } from './components/lang-switcher/lang-switcher';
 import { PendingChanges } from './components/pending-changes/pending-changes';
+import { CommandPalette } from './components/command-palette/command-palette';
 
 const STORAGE_KEY = 'ytpm.lang';
 const SUPPORTED = ['es', 'en'] as const;
@@ -33,19 +34,26 @@ function detectInitialLang(): Lang {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher, PendingChanges],
+  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher, PendingChanges, CommandPalette],
   template: `
     <header class="app-header">
-      <h2 style="margin:0"><a routerLink="/"><i class="fa-brands fa-youtube"></i> {{ 'app.title' | translate }}</a></h2>
-      <div class="row">
+      <div class="app-header__brand">
+        <h2><a routerLink="/">{{ 'app.title' | translate }}</a></h2>
         @if (quota(); as q) {
-          <span class="tag" [title]="'app.nav.quota_title' | translate"
-                [style.background]="q.remaining < 500 ? 'var(--accent)' : 'var(--border)'"
-                [style.color]="q.remaining < 500 ? '#fff' : 'var(--text)'">
-            <i class="fa-solid fa-bolt"></i> {{ q.remaining }}/{{ q.limit }}
+          <span class="app-header__quota"
+                [class.app-header__quota--critical]="q.remaining < 500"
+                [title]="'app.nav.quota_title' | translate">
+            {{ q.remaining }}/{{ q.limit }}
           </span>
         }
-        <app-lang-switcher />
+      </div>
+
+      <button class="secondary app-header__search-btn" (click)="triggerPalette()">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <span class="app-header__search-hint">Ctrl K</span>
+      </button>
+
+      <div class="app-header__nav">
         @if (status()?.isAuthenticated) {
           <a [routerLink]="navPaths().cross">{{ 'app.nav.cross_dups' | translate }}</a>
           <a [routerLink]="navPaths().cache">{{ 'app.nav.cache' | translate }}</a>
@@ -54,12 +62,14 @@ function detectInitialLang(): Lang {
         } @else {
           <a [href]="loginUrl"><button>{{ 'app.nav.login' | translate }}</button></a>
         }
+        <app-lang-switcher />
       </div>
     </header>
     <main>
       <router-outlet />
     </main>
     <app-pending-changes />
+    <app-command-palette />
   `,
 })
 export class App implements OnInit {
@@ -101,6 +111,10 @@ export class App implements OnInit {
     // Cuota: inicial + refresco periódico (también la refrescan las operaciones con costo).
     this.api.refreshQuota();
     setInterval(() => this.api.refreshQuota(), 10000);
+  }
+
+  triggerPalette(): void {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
   }
 
   logout(): void {
