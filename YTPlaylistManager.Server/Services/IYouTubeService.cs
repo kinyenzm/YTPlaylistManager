@@ -13,7 +13,7 @@ public interface IYouTubeService
     Task<MergePlaylistsResultDto> MergePlaylistsAsync(MergePlaylistsRequest req, CancellationToken ct = default);
     MergePreviewDto PreviewMerge(MergePreviewRequest req);
     List<PendingUploadDto> GetPendingUploads();
-    Task<UploadResultDto> UploadPendingAsync(string id, CancellationToken ct = default);
+    Task<UploadResultDto> UploadPendingAsync(string id, int? limit = null, CancellationToken ct = default);
     void DiscardPending(string id);
     PendingSongMoveDto? StageSongAssignment(AssignSongRequest req);
     List<string> GetSongLocations(string videoId);

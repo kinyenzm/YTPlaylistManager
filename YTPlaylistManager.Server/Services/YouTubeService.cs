@@ -82,6 +82,15 @@ public class YouTubeService : IYouTubeService
             || (ex.Message?.Contains("quota", StringComparison.OrdinalIgnoreCase) ?? false);
     }
 
+    // Playlists especiales de YouTube (FL=Favoritos, WL=Ver más tarde, LL=Me gusta, RD=Mezcla)
+    // que la API no permite borrar. Si una lista origen tiene este prefijo, la omitimos en lugar
+    // de dejar el pending bloqueado para siempre.
+    private static bool IsSpecialPlaylist(string id) =>
+        id.StartsWith("FL", StringComparison.Ordinal) ||
+        id.StartsWith("WL", StringComparison.Ordinal) ||
+        id.StartsWith("LL", StringComparison.Ordinal) ||
+        id.StartsWith("RD", StringComparison.Ordinal);
+
     /// <summary>Anota la última modificación local registrada (PlaylistTouchStore).</summary>
     private List<PlaylistDto> AnnotateTouched(List<PlaylistDto> source)
     {
@@ -623,8 +632,9 @@ public class YouTubeService : IYouTubeService
             targetId, targetTitle, added, skipped, 0, pendingId, 0, false));
     }
 
-    /// <summary>Sube a YouTube de verdad las canciones de un cambio pendiente (50u c/u).</summary>
-    public async Task<UploadResultDto> UploadPendingAsync(string id, CancellationToken ct = default)
+    /// <summary>Sube a YouTube de verdad las canciones de un cambio pendiente (50u c/u).
+    /// <paramref name="limit"/> limita el número de canciones a subir en esta llamada; sin valor sube todo.</summary>
+    public async Task<UploadResultDto> UploadPendingAsync(string id, int? limit = null, CancellationToken ct = default)
     {
         var userKey = CurrentUserKey();
         var plan = _pendingUploads.Get(id)
@@ -639,10 +649,11 @@ public class YouTubeService : IYouTubeService
         var remaining = new List<PendingUploadItem>();
         var realIdByLocal = new Dictionary<string, string>(StringComparer.Ordinal);  // localId -> id real de YouTube
         var failedLocalIds = new HashSet<string>(StringComparer.Ordinal);
+        int processed = 0;
 
         foreach (var item in plan.Items)
         {
-            if (paused) { remaining.Add(item); continue; }
+            if (paused || (limit.HasValue && processed >= limit.Value)) { remaining.Add(item); continue; }
             try
             {
                 var inserted = await yt.PlaylistItems.Insert(new PlaylistItem
@@ -657,6 +668,7 @@ public class YouTubeService : IYouTubeService
                 _activity.Publish(new ActivityEvent("insert", item.Title, plan.TargetPlaylistTitle, item.VideoId, DateTime.UtcNow));
                 realIdByLocal[item.LocalItemId] = inserted.Id;
                 uploaded++;
+                processed++;
             }
             catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
             {
@@ -668,6 +680,7 @@ public class YouTubeService : IYouTubeService
                 _logger.LogWarning(ex, "No se pudo subir {Video} a {Target}.", item.VideoId, targetId);
                 failedLocalIds.Add(item.LocalItemId);
                 failed++;
+                processed++;
             }
         }
 
@@ -699,6 +712,14 @@ public class YouTubeService : IYouTubeService
             foreach (var s in plan.Sources)
             {
                 if (paused) { stillPending.Add(s); continue; }
+                // Playlists especiales (FL/WL/LL/RD): la API de YouTube no permite borrarlas.
+                // Las consideramos "completadas" para que el pending no quede bloqueado.
+                if (IsSpecialPlaylist(s.Id))
+                {
+                    _logger.LogWarning("Lista origen {Id} ({Title}) es especial de YouTube y no se puede borrar via API; se omite.", s.Id, s.Title);
+                    _itemsCache.Invalidate(userKey, s.Id);
+                    continue;
+                }
                 var songsCount = _itemsCache.Load(userKey, s.Id)?.Count ?? 0;
                 try
                 {
@@ -794,7 +815,8 @@ public class YouTubeService : IYouTubeService
         var userKey = CurrentUserKey();
         var plan = _pendingUploads.Get(id);
         if (plan is null) return;
-        if (plan.UserKey != userKey)
+        // Entradas huérfanas (UserKey anterior): si ya no tienen canciones que revertir, permitir limpieza.
+        if (plan.UserKey != userKey && plan.Items.Count > 0)
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
 
         var localIds = plan.Items.Select(i => i.LocalItemId).ToHashSet(StringComparer.Ordinal);

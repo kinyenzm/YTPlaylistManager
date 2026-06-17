@@ -58,8 +58,8 @@ public sealed class PlaylistsController(IYouTubeService youtube, IAiClassifier a
 
     [HttpPost("pending-uploads/{id}/upload")]
     [ProducesResponseType<UploadResultDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubirPendiente(string id, CancellationToken ct)
-        => Ok(await youtube.UploadPendingAsync(id, ct));
+    public async Task<IActionResult> SubirPendiente(string id, [FromQuery] int? limit, CancellationToken ct)
+        => Ok(await youtube.UploadPendingAsync(id, limit, ct));
 
     [HttpDelete("pending-uploads/{id}")]
     public IActionResult DescartarPendiente(string id)
