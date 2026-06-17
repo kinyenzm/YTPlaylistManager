@@ -34,7 +34,7 @@ export class PlaylistsPage implements OnInit {
   }
 
   protected readonly playlists = signal<Playlist[]>([]);
-  protected readonly loading = signal(false);
+  protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly selectedIds = signal<ReadonlySet<string>>(new Set());
   protected readonly merging = signal(false);
@@ -102,9 +102,11 @@ export class PlaylistsPage implements OnInit {
         if (s.isAuthenticated) {
           this.load();
           this.pending.refresh();
+        } else {
+          this.loading.set(false);
         }
       },
-      error: () => this.authChecked.set(true),
+      error: () => { this.authChecked.set(true); this.loading.set(false); },
     });
   }
 

@@ -2,8 +2,8 @@
 <h3>{{ 'cross.title' | translate }}</h3>
 <p class="muted">{{ 'cross.intro' | translate }}</p>
 
-<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-top:4px">
-  <span class="muted" style="font-weight:600">{{ 'cross.view_label' | translate }}</span>
+<div class="row cross-org__mode-bar">
+  <span class="muted cross-org__mode-label">{{ 'cross.view_label' | translate }}</span>
   <div class="segmented">
     <button [class.active]="mode() === 'repeated'" (click)="setMode('repeated')">{{ 'cross.mode_repeated' | translate }}</button>
     <button [class.active]="mode() === 'byList'" (click)="setMode('byList')">{{ 'cross.mode_bylist' | translate }}</button>
@@ -12,18 +12,18 @@
 </div>
 
 @if (error()) {
-  <div class="card danger" style="margin-top:12px">{{ error() }}</div>
+  <div class="card danger cross-org__empty-card">{{ error() }}</div>
 }
 
 <!-- ── Modo: Repetidas ── -->
 @if (mode() === 'repeated') {
-  <div class="row" style="margin-top:12px">
+  <div class="row cross-org__actions-row">
     <button (click)="scan(false)" [disabled]="loading()">{{ 'cross.search' | translate }}</button>
     <button class="secondary" (click)="scan(true)" [disabled]="loading()">{{ 'cross.rescan' | translate }}</button>
   </div>
 
   @if (report(); as rep) {
-    <p class="muted" style="margin-top:12px">
+    <p class="muted cross-org__summary">
       {{ 'cross.summary' | translate:{ scanned: rep.scanned, total: rep.totalPlaylists, groups: rep.totalGroups } }}
     </p>
     @if (rep.failed > 0) {
@@ -34,16 +34,16 @@
     }
     @for (g of groupsSorted(); track g.videoId) {
       <div class="card">
-        <div class="row" style="align-items:flex-start;gap:8px">
+        <div class="row cross-org__song-row">
           <img [src]="thumb(g.videoId)" class="thumb" alt="" />
-          <div style="flex:1">
+          <div class="cross-org__song-body">
             <a [href]="'https://www.youtube.com/watch?v=' + g.videoId" target="_blank" rel="noopener">{{ g.title }}</a>
-            <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+            <div class="row row--tags">
               <span class="muted">{{ 'cross.appears_in' | translate }}</span>
               @for (p of g.playlists; track p.playlistId) {
-                <span class="tag badge-edit" [class.staged-out]="removedSet(g.videoId).has(p.playlistId)">
+                <span class="tag tag--editable" [class.tag--staged-out]="removedSet(g.videoId).has(p.playlistId)">
                   {{ p.playlistTitle }}
-                  <button type="button" class="badge-x"
+                  <button type="button" class="tag__remove-btn"
                           (click)="$event.stopPropagation(); toggleRemoval(g.videoId, p.playlistId)"
                           [title]="(removedSet(g.videoId).has(p.playlistId) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
                     @if (removedSet(g.videoId).has(p.playlistId)) { <i class="fa-solid fa-rotate-left"></i> }
@@ -53,7 +53,7 @@
               }
             </div>
             @if (removedSet(g.videoId).size > 0) {
-              <div class="row" style="gap:8px;margin-top:8px">
+              <div class="row row--actions">
                 <button (click)="saveCard(g.videoId, g.title, playlistIdsOf(g))" [disabled]="applying()">
                   {{ 'cross.save_changes' | translate:{ n: removedSet(g.videoId).size } }}
                 </button>
@@ -72,24 +72,24 @@
 
 <!-- ── Modo: Por lista (absorbe el viejo detalle de playlist) ── -->
 @if (mode() === 'byList') {
-  <div class="row" style="margin-top:12px;align-items:center;gap:8px">
+  <div class="row cross-org__list-picker">
     <label class="muted">{{ 'cross.pick_list' | translate }}</label>
-    <select [ngModel]="listId()" (ngModelChange)="pickList($event)" style="flex:1">
+    <select [ngModel]="listId()" (ngModelChange)="pickList($event)" class="cross-org__select">
       <option value="">—</option>
       @for (pl of allPlaylists(); track pl.id) {
         <option [value]="pl.id">{{ optionLabel(pl) }}</option>
       }
     </select>
-    @if (listId() && (dupCounts()[listId()] ?? 0) > 0) {
-      <span class="dup-badge" [title]="'cross.dups_in_list' | translate:{ n: dupCounts()[listId()] }">{{ dupCounts()[listId()] }}</span>
+    @if (listId() && (dupCounts()[listId()]) > 0) {
+      <span class="tag--dup-count" [title]="'cross.dups_in_list' | translate:{ n: dupCounts()[listId()] }">{{ dupCounts()[listId()] }}</span>
     }
   </div>
 
   @if (listId()) {
-    <!-- Herramientas de la lista (antes vivían en el detalle de playlist) -->
-    <div class="card" style="margin-top:12px">
+    <!-- Herramientas de la lista -->
+    <div class="card cross-org__actions-card">
       <strong>{{ 'detail.actions' | translate }}</strong>
-      <div class="row toolbar" style="margin-top:8px">
+      <div class="row toolbar cross-org__actions-row">
         <button (click)="loadDuplicates()" [disabled]="loadingDup()">{{ 'detail.find_dup' | translate }}</button>
         <select [ngModel]="strategy()" (ngModelChange)="strategy.set($event)">
           <option value="videoId">{{ 'detail.strategy_videoId' | translate }}</option>
@@ -106,7 +106,7 @@
         </select>
         <button (click)="classify()" [disabled]="classifying()" [title]="aiError() ?? ''">{{ 'detail.classify' | translate }}</button>
         @if (aiError(); as ae) {
-          <span class="tag" style="background:var(--accent);color:#fff" role="alert">{{ ae }}</span>
+          <span class="tag tag--danger" role="alert">{{ ae }}</span>
         }
       </div>
     </div>
@@ -115,20 +115,20 @@
       <div class="card">
         <strong>{{ 'detail.dup_summary' | translate:{ count: dup.duplicateCount, total: dup.totalItems } }}</strong>
         @if (dup.duplicateCount > 0) {
-          <p class="muted" style="margin:4px 0 0">{{ 'detail.dup_action_hint' | translate }}</p>
+          <p class="muted cross-org__dup-hint">{{ 'detail.dup_action_hint' | translate }}</p>
         }
         @if (stagedMsg(); as sm) {
-          <p class="accent" style="margin:6px 0 0">{{ sm }}</p>
+          <p class="accent cross-org__staged-msg">{{ sm }}</p>
         }
         @for (g of dupGroupsSorted(); track g.key) {
-          <div style="margin-top:10px">
+          <div class="cross-org__dup-group">
             <div class="tag">{{ g.matchType === 'videoId' ? ('detail.match_videoId' | translate) : ('detail.match_normalizedTitle' | translate) }}</div>
             @for (it of g.items; track it.playlistItemId) {
-              <div class="row" style="margin-top:4px;align-items:center;gap:8px">
+              <div class="row cross-org__dup-row">
                 @if (it.thumbnailUrl) {
                   <img [src]="it.thumbnailUrl" class="thumb" alt="" />
                 }
-                <div style="flex:1">
+                <div class="flex-fill">
                   <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + listId()" target="_blank" rel="noopener">{{ it.title }}</a>
                   <div class="muted">#{{ it.position }} · {{ it.channelTitle }}</div>
                 </div>
@@ -147,9 +147,9 @@
       <div class="card">
         <strong>{{ 'detail.classified' | translate:{ mode: (cls.mode === 'genre' ? ('detail.mode_label_genre' | translate) : (cls.mode === 'mood' ? ('detail.mode_label_mood' | translate) : ('detail.mode_label_decade' | translate))) } }}</strong>
         @for (key of classKeys(); track key) {
-          <div style="margin-top:10px">
-            <h4 style="margin:6px 0">{{ key }} ({{ cls.groups[key].length }})</h4>
-            <ul style="margin:0; padding-left:18px">
+          <div class="cross-org__section-group">
+            <h4 class="cross-org__section-heading">{{ key }} ({{ cls.groups[key].length }})</h4>
+            <ul class="cross-org__section-list">
               @for (s of cls.groups[key]; track s.videoId) {
                 <li>{{ s.title }}</li>
               }
@@ -160,34 +160,47 @@
     }
   }
 
-  @if (listId() && listItems().length > 0) {
-    <div style="margin-top:12px">
+  @if (loadingItems()) {
+    <div class="cross-org__song-list">
+      @for (_ of [1,2,3,4,5]; track $index) {
+        <div class="card--skeleton">
+          <div class="row">
+            <span class="skeleton skeleton--thumb"></span>
+            <div class="flex-fill">
+              <span class="skeleton skeleton--title"></span>
+              <span class="skeleton skeleton--text" style="width:50%"></span>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else if (listId() && listItems().length > 0) {
+    <div class="cross-org__song-list">
       @for (it of listItemsSorted(); track it.playlistItemId) {
         <div class="card">
-          <div class="row" style="align-items:flex-start;gap:8px">
+          <div class="row cross-org__song-row">
             <img [src]="it.thumbnailUrl || thumb(it.videoId)" class="thumb" alt="" />
-            <div style="flex:1">
+            <div class="cross-org__song-body">
               <div>
                 <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + listId()" target="_blank" rel="noopener">{{ it.title }}</a>
                 @if (isUnavailable(it.title)) {
-                  <span class="tag" style="background:var(--accent);color:#fff">{{ 'cross.unavailable_tag' | translate }}</span>
+                  <span class="tag tag--danger">{{ 'cross.unavailable_tag' | translate }}</span>
                 }
               </div>
               <div class="muted">{{ it.channelTitle }}</div>
-              @if (refsFor(locMap()[it.videoId] ?? []).length) {
-                <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+              @if (refsFor(locMap()[it.videoId]).length) {
+                <div class="row row--tags">
                   <span class="muted">{{ 'cross.appears_in' | translate }}</span>
-                  <!-- Videos privados/borrados: solo lectura — YouTube no permite gestionarlos
-                       sin acceso al video; edición pendiente de una futura configuración. -->
+                  <!-- Videos privados/borrados: solo lectura -->
                   @if (isUnavailable(it.title)) {
-                    @for (ref of refsFor(locMap()[it.videoId] ?? []); track ref.id) {
+                    @for (ref of refsFor(locMap()[it.videoId]); track ref.id) {
                       <span class="tag">{{ ref.title }}</span>
                     }
                   } @else {
-                    @for (ref of refsFor(locMap()[it.videoId] ?? []); track ref.id) {
-                      <span class="tag badge-edit" [class.staged-out]="removedSet(it.videoId).has(ref.id)">
+                    @for (ref of refsFor(locMap()[it.videoId]); track ref.id) {
+                      <span class="tag tag--editable" [class.tag--staged-out]="removedSet(it.videoId).has(ref.id)">
                         {{ ref.title }}
-                        <button type="button" class="badge-x"
+                        <button type="button" class="tag__remove-btn"
                                 (click)="$event.stopPropagation(); toggleRemoval(it.videoId, ref.id)"
                                 [title]="(removedSet(it.videoId).has(ref.id) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
                           @if (removedSet(it.videoId).has(ref.id)) { <i class="fa-solid fa-rotate-left"></i> }
@@ -199,8 +212,8 @@
                 </div>
               }
               @if (removedSet(it.videoId).size > 0) {
-                <div class="row" style="gap:8px;margin-top:8px">
-                  <button (click)="$event.stopPropagation(); saveCard(it.videoId, it.title, locMap()[it.videoId] ?? [])" [disabled]="applying()">
+                <div class="row row--actions">
+                  <button (click)="$event.stopPropagation(); saveCard(it.videoId, it.title, locMap()[it.videoId])" [disabled]="applying()">
                     {{ 'cross.save_changes' | translate:{ n: removedSet(it.videoId).size } }}
                   </button>
                   <button class="secondary" (click)="$event.stopPropagation(); discardCard(it.videoId)">{{ 'common.cancel' | translate }}</button>
@@ -216,14 +229,14 @@
         </div>
       }
     </div>
-  } @else if (listId() && !loading()) {
-    <div class="card" style="margin-top:10px">{{ 'cross.empty_list' | translate }}</div>
+  } @else if (listId() && !loadingItems()) {
+    <div class="card cross-org__empty-card">{{ 'cross.empty_list' | translate }}</div>
   }
 }
 
 <!-- ── Modo: Por canción (fusión de /buscar: filtros en vivo) ── -->
 @if (mode() === 'bySong') {
-  <div class="row toolbar" style="margin-top:12px">
+  <div class="row toolbar cross-org__actions-row">
     <input type="text" [ngModel]="nameInput()" (ngModelChange)="nameInput.set($event); onFilterChange()"
            (keyup.enter)="search()" [placeholder]="'cross.filter_name_ph' | translate" style="flex:2;min-width:200px" />
     <input type="text" [ngModel]="idInput()" (ngModelChange)="idInput.set($event); onFilterChange()"
@@ -236,24 +249,36 @@
   </div>
 
   @if (searching()) {
-    <p class="muted" style="margin-top:12px">{{ 'common.loading' | translate }}</p>
+    <div class="cross-org__song-list">
+      @for (_ of [1,2,3,4,5]; track $index) {
+        <div class="card--skeleton">
+          <div class="row">
+            <span class="skeleton skeleton--thumb"></span>
+            <div class="flex-fill">
+              <span class="skeleton skeleton--title"></span>
+              <span class="skeleton skeleton--text" style="width:50%"></span>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
   }
 
   @if (results().length > 0) {
-    <p class="muted" style="margin-top:12px">{{ 'cross.results_count' | translate:{ n: results().length } }}</p>
+    <p class="muted cross-org__summary">{{ 'cross.results_count' | translate:{ n: results().length } }}</p>
     @for (r of resultsSorted(); track r.videoId + r.originalPlaylistId) {
       <div class="card">
-        <div class="row" style="align-items:flex-start;gap:8px">
+        <div class="row cross-org__song-row">
           <img [src]="thumb(r.videoId)" class="thumb" alt="" />
-          <div style="flex:1">
+          <div class="cross-org__song-body">
             <div><a [href]="'https://www.youtube.com/watch?v=' + r.videoId" target="_blank" rel="noopener">{{ r.title }}</a></div>
             <div class="muted">{{ r.channelTitle }}</div>
-            <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:4px">
+            <div class="row row--tags">
               <span class="muted">{{ 'cross.appears_in' | translate }}</span>
               @for (ref of refsFor(r.appearsInPlaylistIds); track ref.id) {
-                <span class="tag badge-edit" [class.staged-out]="removedSet(r.videoId).has(ref.id)">
+                <span class="tag tag--editable" [class.tag--staged-out]="removedSet(r.videoId).has(ref.id)">
                   {{ ref.title }}
-                  <button type="button" class="badge-x"
+                  <button type="button" class="tag__remove-btn"
                           (click)="$event.stopPropagation(); toggleRemoval(r.videoId, ref.id)"
                           [title]="(removedSet(r.videoId).has(ref.id) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
                     @if (removedSet(r.videoId).has(ref.id)) { <i class="fa-solid fa-rotate-left"></i> }
@@ -263,7 +288,7 @@
               }
             </div>
             @if (removedSet(r.videoId).size > 0) {
-              <div class="row" style="gap:8px;margin-top:8px">
+              <div class="row row--actions">
                 <button (click)="saveCard(r.videoId, r.title, r.appearsInPlaylistIds)" [disabled]="applying()">
                   {{ 'cross.save_changes' | translate:{ n: removedSet(r.videoId).size } }}
                 </button>
@@ -278,33 +303,42 @@
       </div>
     }
   } @else if (!searching() && (nameInput().trim() || idInput().trim())) {
-    <div class="card" style="margin-top:10px">{{ 'cross.no_results' | translate }}</div>
+    <div class="card cross-org__empty-card">{{ 'cross.no_results' | translate }}</div>
   } @else if (!searching()) {
-    <p class="muted" style="margin-top:12px">{{ 'cross.search_intro' | translate }}</p>
+    <p class="muted cross-org__summary">{{ 'cross.search_intro' | translate }}</p>
   }
 }
 
 <!-- ── Editor de asignación (modal: agregar a listas nuevas, multi-selección) ── -->
 @if (editingVideoId()) {
   <div class="modal-backdrop" (click)="closeEditor()">
-    <div class="modal" (click)="$event.stopPropagation()" style="max-width:540px;max-height:84vh;overflow:auto">
-      <h3 style="margin-top:0">{{ editingTitle() }}</h3>
+    <div class="modal cross-org__modal" (click)="$event.stopPropagation()">
+      <h3 class="modal__title">{{ editingTitle() }}</h3>
       <p class="muted">{{ 'cross.assign_help' | translate }}</p>
       @if (editorLoading()) {
-        <div class="muted">{{ 'common.loading' | translate }}</div>
+        <div class="cross-org__song-list">
+          @for (_ of [1,2,3]; track $index) {
+            <div class="card--skeleton">
+              <div class="row">
+                <span class="skeleton skeleton--text" style="width:70%"></span>
+                <span class="skeleton skeleton--meta" style="width:30px"></span>
+              </div>
+            </div>
+          }
+        </div>
       } @else {
-        <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:6px">
+        <div class="cross-org__list-scroller">
           @for (pl of editorPlaylists(); track pl.id) {
             <label class="opt-row" [class.on]="isChecked(pl.id)">
               <input type="checkbox" [checked]="isChecked(pl.id)" (change)="toggle(pl.id)" />
-              <span style="flex:1">{{ pl.title }}</span>
+              <span class="flex-fill">{{ pl.title }}</span>
               <span class="muted">{{ pl.itemCount }}</span>
             </label>
           }
         </div>
-        <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px">
+        <div class="row row--modal-footer">
           <span class="muted">{{ 'cross.assign_summary' | translate:{ n: selection().size } }}</span>
-          <div class="row" style="gap:8px">
+          <div class="row row--btn-group">
             <button class="secondary" (click)="closeEditor()">{{ 'common.cancel' | translate }}</button>
             <button (click)="apply()" [disabled]="applying()">{{ 'cross.assign_apply' | translate }}</button>
           </div>
@@ -324,7 +358,7 @@
         @else { {{ 'cross.busy_title' | translate }} }
       </h4>
       <div class="progress indeterminate"><div class="bar"></div></div>
-      <p class="muted" style="margin:12px 0 0">{{ 'cross.busy_desc' | translate }}</p>
+      <p class="muted cross-org__busy-desc">{{ 'cross.busy_desc' | translate }}</p>
     </div>
   </div>
 }

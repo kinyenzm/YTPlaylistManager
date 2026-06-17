@@ -1,4 +1,4 @@
-<div class="row" style="justify-content:space-between">
+<div class="row row--between">
   <h3 style="margin:0">{{ 'playlists.title' | translate }}</h3>
   @if (authenticated()) {
     <button class="secondary" (click)="openRefreshConfirm()" [disabled]="loading() || refreshing()">
@@ -17,7 +17,18 @@
 }
 
 @if (loading()) {
-  <div>{{ 'common.loading' | translate }}</div>
+  <div class="grid">
+    @for (_ of [1,2,3,4,5,6]; track $index) {
+      <div class="card--skeleton">
+        <div class="row">
+          <span class="skeleton skeleton--thumb"></span>
+        </div>
+        <span class="skeleton skeleton--title"></span>
+        <span class="skeleton skeleton--text" style="width:55%"></span>
+        <span class="skeleton skeleton--meta"></span>
+      </div>
+    }
+  </div>
 }
 
 @if (error()) {
@@ -28,7 +39,7 @@
   <div class="card">
     <strong>{{ 'playlists.selection_title' | translate:{ count: selectedIds().size } }}</strong>
 
-    <div class="row" style="margin-top:8px">
+    <div class="row cross-org__actions-row">
       <label class="muted">{{ 'playlists.merge_into' | translate }}</label>
       <select [ngModel]="targetId()" (ngModelChange)="targetOverride.set($event)">
         @for (p of selectedPlaylists(); track p.id) {
@@ -49,16 +60,19 @@
 <div class="grid">
   @for (p of playlistsSorted(); track p.id) {
     <div class="card"
-         [class.archived]="p.isArchived || p.queuedForMerge"
-         [class.selectable]="!p.isArchived && !p.queuedForMerge"
-         [class.selected]="selectedIds().has(p.id)"
+         [class.card--archived]="p.isArchived || p.queuedForMerge"
+         [class.card--selectable]="!p.isArchived && !p.queuedForMerge"
+         [class.card--selected]="selectedIds().has(p.id)"
          (click)="toggleCard(p)">
+      @if (selectedIds().has(p.id)) {
+        <span class="card__check"><i class="fa-solid fa-circle-check"></i></span>
+      }
       <div class="row">
         @if (p.thumbnailUrl) {
           <img [src]="p.thumbnailUrl" class="thumb" alt="" />
         }
       </div>
-      <h4 style="margin:8px 0 4px">
+      <h4 class="card__title">
         <a [routerLink]="['/organizar/lista', p.id]" (click)="$event.stopPropagation()">{{ p.title }}</a>
         @if (p.isArchived) {
           <span class="tag archived-tag" [title]="p.archivedIntoPlaylistTitle ?? ''">
@@ -67,13 +81,13 @@
         }
       </h4>
       @if (p.queuedForMerge) {
-        <div style="margin:0 0 6px">
+        <div class="card__queue-tag">
           <span class="tag queued-tag" [title]="('playlists.queued_tag' | translate:{ title: p.queuedIntoTitle })">
             {{ 'playlists.queued_tag' | translate:{ title: p.queuedIntoTitle } }}
           </span>
         </div>
       }
-      <div class="row" style="gap:6px">
+      <div class="row row--tight">
         <span class="muted">{{ 'playlists.songs_count' | translate:{ count: p.itemCount } }}</span>
         @switch (p.privacy) {
           @case ('public') { <span class="tag">{{ 'playlists.privacy_public' | translate }}</span> }
@@ -82,7 +96,7 @@
         }
       </div>
       @if (p.lastModifiedUtc) {
-        <div class="muted" style="font-size:.85em;margin-top:4px">
+        <div class="muted card__date">
           <i class="fa-regular fa-clock"></i> {{ 'playlists.modified' | translate:{ ago: modifiedAgo(p.lastModifiedUtc) } }}
         </div>
       }
@@ -96,9 +110,9 @@
 @if (refreshConfirmOpen()) {
   <div class="modal-backdrop" (click)="cancelRefresh()">
     <div class="modal" (click)="$event.stopPropagation()">
-      <h3 style="margin-top:0">⚠ {{ 'playlists.refresh_all_confirm_title' | translate }}</h3>
+      <h3 class="modal__title">⚠ {{ 'playlists.refresh_all_confirm_title' | translate }}</h3>
       <p>{{ 'playlists.refresh_all_confirm_body' | translate:{ playlists: refreshEstimate().playlists, quota: refreshEstimate().quota } }}</p>
-      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:16px">
+      <div class="row row--modal-actions">
         <button class="secondary" (click)="cancelRefresh()">{{ 'common.cancel' | translate }}</button>
         <button (click)="confirmRefresh()">{{ 'playlists.refresh_all' | translate }}</button>
       </div>
@@ -109,11 +123,11 @@
 @if (refreshResult(); as r) {
   <div class="modal-backdrop" (click)="dismissRefreshResult()">
     <div class="modal" (click)="$event.stopPropagation()">
-      <h3 style="margin-top:0">✓ {{ 'playlists.refresh_all_done' | translate:{ playlists: r.playlistsRefreshed, items: r.itemsRefreshed, quota: r.quotaUsed } }}</h3>
+      <h3 class="modal__title">✓ {{ 'playlists.refresh_all_done' | translate:{ playlists: r.playlistsRefreshed, items: r.itemsRefreshed, quota: r.quotaUsed } }}</h3>
       @if (r.playlistsSkipped > 0) {
         <p class="muted">{{ 'playlists.refresh_all_partial' | translate:{ skipped: r.playlistsSkipped } }}</p>
       }
-      <div class="row" style="justify-content:flex-end;margin-top:16px">
+      <div class="row row--modal-actions">
         <button (click)="dismissRefreshResult()">OK</button>
       </div>
     </div>
@@ -122,27 +136,27 @@
 
 @if (preview(); as pv) {
   <div class="modal-backdrop" (click)="cancelPreview()">
-    <div class="modal" (click)="$event.stopPropagation()" style="max-width:640px;max-height:82vh;overflow:auto">
-      <h3 style="margin-top:0">{{ 'playlists.preview_title' | translate:{ title: pv.targetPlaylistTitle } }}</h3>
+    <div class="modal modal--large" (click)="$event.stopPropagation()">
+      <h3 class="modal__title">{{ 'playlists.preview_title' | translate:{ title: pv.targetPlaylistTitle } }}</h3>
       <p class="muted">{{ 'playlists.preview_summary' | translate:{ add: pv.toAddCount, present: pv.alreadyPresentCount } }}</p>
 
       @for (w of pv.warnings; track w) {
-        <div class="card danger" style="padding:8px 12px;margin-bottom:8px">⚠ {{ w }}</div>
+        <div class="card danger card--warning">⚠ {{ w }}</div>
       }
 
       @if (pv.toAddCount === 0) {
         <div class="card">{{ 'playlists.preview_nothing' | translate }}</div>
       } @else {
-        <div style="margin:8px 0">
+        <div class="modal__list">
           @for (s of pv.toAdd; track s.videoId) {
-            <div class="row" style="margin-top:8px;align-items:flex-start">
+            <div class="row row--item">
               @if (s.thumbnailUrl) {
                 <img [src]="s.thumbnailUrl" class="thumb" alt="" />
               }
               <div>
                 <div>{{ s.title }}</div>
                 <div class="muted">{{ s.channelTitle }}</div>
-                <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:2px">
+                <div class="row row--tags">
                   <span class="muted">{{ 'playlists.preview_from' | translate }}</span>
                   @for (f of s.fromPlaylists; track f) {
                     <span class="tag">{{ f }}</span>
@@ -154,9 +168,9 @@
         </div>
       }
 
-      <div class="row" style="justify-content:space-between;align-items:center;margin-top:16px">
+      <div class="row row--preview-footer">
         <span class="muted">{{ 'playlists.preview_quota' | translate:{ quota: pv.estimatedQuotaUnits } }}</span>
-        <div class="row" style="gap:8px">
+        <div class="row row--btn-group">
           <button class="secondary" (click)="cancelPreview()">{{ 'common.cancel' | translate }}</button>
           <button (click)="merge()">
             {{ (pv.toAddCount > 0 ? 'playlists.preview_confirm' : 'playlists.preview_confirm_redundant') | translate:{ add: pv.toAddCount } }}
@@ -172,8 +186,7 @@
     <div class="busy-card">
       <h4>{{ 'playlists.merge_apply_title' | translate }}</h4>
       <div class="progress indeterminate"><div class="bar"></div></div>
-      <p class="muted" style="margin:12px 0 0">{{ 'playlists.merge_apply_desc' | translate }}</p>
+      <p class="muted cross-org__busy-desc">{{ 'playlists.merge_apply_desc' | translate }}</p>
     </div>
   </div>
 }
-

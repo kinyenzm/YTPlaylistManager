@@ -114,6 +114,7 @@ export class CrossDuplicates {
   // ── Herramientas de lista (portadas del viejo detalle de playlist) ──
   protected readonly duplicates = signal<DuplicateReport | null>(null);
   protected readonly classification = signal<ClassifyResult | null>(null);
+  protected readonly loadingItems = signal(false);
   protected readonly loadingDup = signal(false);
   protected readonly cleaning = signal(false);
   protected readonly classifying = signal(false);
@@ -184,6 +185,19 @@ export class CrossDuplicates {
         this.pickList(pid);
       });
     });
+
+    // Deep-link desde el command palette → modo "por canción" pre-buscado (vía router state, sin query params).
+    const navQ = (history.state as { q?: string })?.q;
+    if (navQ) {
+      const looksLikeId = /^[A-Za-z0-9_-]{8,}$/.test(navQ) && !navQ.includes(' ');
+      if (looksLikeId) {
+        this.idInput.set(navQ);
+      } else {
+        this.nameInput.set(navQ);
+      }
+      this.mode.set('bySong');
+      setTimeout(() => this.search(), 0);
+    }
 
     // Título del documento: "{lista} — {app}" cuando hay lista elegida.
     effect(() => {
@@ -256,12 +270,12 @@ export class CrossDuplicates {
       this.listItems.set([]);
       return;
     }
-    this.loading.set(true);
+    this.loadingItems.set(true);
     this.error.set(null);
     this.api.listItems(id, true).subscribe({   // solo caché: nunca lee de YouTube
       next: (items) => {
         this.listItems.set(items);
-        this.loading.set(false);
+        this.loadingItems.set(false);
         const ids = items.map((i) => i.videoId).filter(Boolean);
         if (ids.length) {
           this.api.songLocationsBatch(ids).subscribe({
@@ -272,7 +286,7 @@ export class CrossDuplicates {
       },
       error: (e) => {
         this.error.set(this.translate.instant('cross.error_scan'));
-        this.loading.set(false);
+        this.loadingItems.set(false);
         console.error(e);
       },
     });
