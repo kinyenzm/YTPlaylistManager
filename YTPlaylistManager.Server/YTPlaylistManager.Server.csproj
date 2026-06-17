@@ -6,18 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>YTPlaylistManager.Server</RootNamespace>
     <AssemblyName>YTPlaylistManager.Server</AssemblyName>
-
-    <!-- SPA: en dev (F5) SpaProxy auto-lanza el dev-server Angular y proxea el navegador. -->
-    <SpaRoot>..\YTPlaylistManager.client\</SpaRoot>
-    <SpaProxyServerUrl>http://localhost:4200</SpaProxyServerUrl>
-    <SpaProxyLaunchCommand>npm start</SpaProxyLaunchCommand>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
     <PackageReference Include="Google.Apis.YouTube.v3" Version="1.68.0.3513" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="10.0.2" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.10.0" />
   </ItemGroup>
 
