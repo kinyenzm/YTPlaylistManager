@@ -2,9 +2,16 @@
 
 Herramienta personal full stack (**ASP.NET Core .NET 10** + **Angular 22** — standalone, zoneless, signals, i18n es/en) para gestionar tus playlists de YouTube/YouTube Music: listar, **quitar repetidas**, **unir playlists** (local-first, con subida controlada a YouTube) y **ordenar canciones con IA**.
 
-> **IA asistente:** este proyecto se desarrolla con [Claude Code](https://claude.ai/code) usando **Claude Fable 5** (modelo en pruebas activas).
+---
 
-Importante: YouTube Data API funciona igual con o sin Premium; **YouTube Premium no aporta funciones extra** para esta herramienta, pero tampoco te limita. Lo único que necesitas es una cuenta de Google con tus playlists.
+## Desarrollo con IA
+
+Este proyecto se desarrolla íntegramente con [Claude Code](https://claude.ai/code). Atribución por etapa:
+
+| Etapa | Modelo | Período | Alcance |
+|-------|--------|---------|---------|
+| Arquitectura base + features principales | **Claude Fable 5** | hasta jun 10 2026 | Stack completo: backend .NET 10, frontend Angular 22, OAuth, cache local, organizador, panel pendientes, feed SSE, diseño "midnight studio" |
+| UX / bugs / refactor CSS | **Claude Sonnet 4.6** | jun 16 2026 | Command palette Ctrl+K, skeleton loading, progreso de subida en tiempo real, fix listas especiales YouTube, BEM en CSS, eliminación de inline styles, navegación vía router state |
 
 ---
 
@@ -35,8 +42,9 @@ YTPlaylistManager/
 │       └── app/
 │           ├── services/         # api.service.ts, pending.service.ts
 │           ├── models/           # models.ts
-│           ├── components/       # cache-explorer, lang-switcher, pending-changes
-│           └── pages/            # playlists, playlist-detail, cross-duplicates
+│           ├── components/       # cache-explorer, lang-switcher, pending-changes,
+│           │                     #   command-palette (Ctrl+K)
+│           └── pages/            # playlists, cross-duplicates (incluye Por lista y Por canción)
 ├── Dockerfile                     # build client + backend, sirve el SPA desde wwwroot
 └── YTPlaylistManager.slnx         # Solución (formato XML)
 ```
@@ -99,7 +107,7 @@ La API de NVIDIA es **compatible con OpenAI Chat Completions**, así que el mism
 ```bash
 cd YTPlaylistManager.Server
 dotnet restore
-dotnet run
+dotnet run --launch-profile http
 ```
 
 Abrirá la UI **Scalar** en `http://localhost:5080/scalar/v1` (documento OpenAPI nativo de .NET 10 en `http://localhost:5080/openapi/v1.json`).
@@ -120,21 +128,27 @@ Abre `http://localhost:4200` automáticamente. El `proxy.conf.js` redirige `/api
 
 ## 5) Flujo
 
-1. **Conectar con Google** → consent → vuelve con sesión activa. Verás tus listas.
+1. **Conectar con Google** → consent → vuelve con sesión activa. Verás tus listas con **skeleton loading** mientras cargan.
 2. **Quitar repetidas** (dentro de una lista): *Buscar repetidas* → elige *Quitar* o *Dejar este* en cada grupo. Los duplicados se priorizan: **mismo título primero**, mismo video después. Los cambios van a la **cola global de subidas**.
 3. **Unir listas** (en *Mis listas*), modelo **local-first**:
-   - Hacé clic en 2+ listas (toda la card es cliqueable, sin checkbox) → **Revisar y unir** → vista previa → **Aplicar**.
+   - Hacé clic en 2+ listas (toda la card es cliqueable — estado seleccionado claramente distinguido con borde lima + checkmark) → **Revisar y unir** → vista previa → **Aplicar**.
    - La unión se aplica **en local** (0 cuota) y queda **pendiente de subir**; aparece la burbuja flotante de cambios pendientes. Las listas origen quedan marcadas como *en cola*.
-   - **Subir a YouTube**: inserta las canciones en la lista destino y **borra las listas origen** de tu cuenta. Es **parcial y reanudable**: si se agota la cuota diaria, continúa al día siguiente desde donde quedó.
+   - **Subir a YouTube**: inserta las canciones en la lista destino y **borra las listas origen** de tu cuenta. Es **parcial y reanudable**: si se agota la cuota diaria, continúa al día siguiente desde donde quedó. El overlay muestra **cada canción subida en tiempo real** con ✓.
+   - **Listas especiales de YouTube** (Favoritos `FL`, Ver más tarde `WL`, `LL`, `RD`): se detectan automáticamente y se omite su borrado vía API (YouTube no lo permite), evitando que la unión quede bloqueada para siempre.
    - **Descartar** revierte la unión local sin tocar YouTube.
 4. **Organizar canciones** (menú *Organizar*, ruta `/organizar`), también **local-first**. Tres modos:
    - **Repetidas**: las canciones que están en 2+ listas.
-   - **Por lista**: elegís una lista y ves todas sus canciones; podés seleccionar varias y **quitarlas** de esa lista de una.
-   - **Por canción**: buscás por nombre o ID.
+   - **Por lista**: elegís una lista y ves todas sus canciones; podés seleccionar varias y **quitarlas** de esa lista de una. Muestra skeleton loading mientras carga.
+   - **Por canción**: buscás por nombre o ID. Muestra skeleton loading mientras busca.
    - En cualquier modo, por canción abrís un selector con **todas tus listas** (marcadas donde está ahora) y elegís dónde debe quedar — **en varias o en una sola**. Se agrega a las nuevas y se quita de las desmarcadas. Todo queda **pendiente de subir**.
-5. **Cambios pendientes — panel global**: una burbuja en la esquina inferior izquierda agrupa *todas* las subidas pendientes (uniones y reasignaciones de canciones) de cualquier pantalla. Podés subir o descartar de forma individual o en bloque desde ahí. El log completo de actividad real en YouTube queda en **Historial → Actividad**.
-6. **Ordenar con IA** (dentro de una lista): por *género / ánimo / década*.
-7. **Idioma**: selector **ES / EN** arriba (autodetecta el del navegador). Las rutas existen en ambos idiomas (`/organizar` ↔ `/organize`, `/buscar` ↔ `/search`, `/datos` ↔ `/data`, `/listas/:id` ↔ `/playlists/:id`). Casi todo funciona **offline** desde la cache (0 cuota); solo *Actualizar todo* y *Subir a YouTube* usan la API.
+5. **Búsqueda rápida — Ctrl+K**: abre el command palette desde cualquier pantalla (también vía botón en la navbar). Busca en local sin cuota:
+   - **Playlists** por nombre (filtro client-side instantáneo).
+   - **Canciones** por nombre, videoId parcial o canal (búsqueda en cache vía API).
+   - Seleccionar una canción abre directamente el modo **Por canción** pre-buscado.
+   - Navegar con ↑↓, confirmar con ↵, cerrar con Esc.
+6. **Cambios pendientes — panel global**: una burbuja en la esquina inferior izquierda agrupa *todas* las subidas pendientes (uniones y reasignaciones de canciones) de cualquier pantalla. Podés subir o descartar de forma individual o en bloque desde ahí. El log completo de actividad real en YouTube queda en **Historial → Actividad**.
+7. **Ordenar con IA** (dentro de una lista): por *género / ánimo / década*.
+8. **Idioma**: selector **ES / EN** arriba (autodetecta el del navegador). Las rutas existen en ambos idiomas (`/organizar` ↔ `/organize`, `/datos` ↔ `/data`). Casi todo funciona **offline** desde la cache (0 cuota); solo *Actualizar todo* y *Subir a YouTube* usan la API.
 
 ---
 
@@ -154,11 +168,11 @@ Abre `http://localhost:4200` automáticamente. El `proxy.conf.js` redirige `/api
 | POST   | `/api/playlists/merge` | Une en local → deja pendiente de subir |
 | POST   | `/api/playlists/merge/preview` | Vista previa de la unión (0 cuota) |
 | GET    | `/api/playlists/pending-uploads` | Cambios pendientes de subir |
-| POST   | `/api/playlists/pending-uploads/{id}/upload` | Sube a YouTube (+ borra listas origen) |
+| POST   | `/api/playlists/pending-uploads/{id}/upload` | Sube a YouTube (+ borra listas origen si no son especiales) |
 | DELETE | `/api/playlists/pending-uploads/{id}` | Descarta y revierte la unión local |
 | POST   | `/api/playlists/refresh-all` | Relee todas las listas desde YouTube |
 | POST   | `/api/playlists/{id}/classify` | Ordena con IA |
-| POST   | `/api/songs/search` | Busca canciones (videoId/nombre, en cache) |
+| POST   | `/api/songs/search` | Busca canciones (videoId/nombre/canal, en cache) |
 | GET    | `/api/songs/{videoId}/locations` | Listas donde está la canción (cache, 0 cuota) |
 | POST   | `/api/songs/assign` | Asigna la canción a un set de listas (agrega/quita) → pendiente |
 | POST   | `/api/songs/remove-from-playlist` | Quita varias canciones de una lista → pendiente |
@@ -204,8 +218,12 @@ La app queda en `http://localhost:8080`. Ajusta la `Authorized redirect URI` en 
 - **Detección de duplicados** en dos niveles: por `videoId` (exacto) y por **título normalizado** (quita paréntesis, "official video", acentos, etc.) — capta "misma canción subida por canales distintos". Dentro de una lista, los grupos de título normalizado aparecen primero, los de mismo video después.
 - **Cola de cambios unificada** (`PendingService`): un servicio singleton en el frontend agrupa uniones de listas y reasignaciones de canciones. El panel flotante global refleja el estado en tiempo real desde cualquier pantalla.
 - **Local-first**: todas las operaciones de escritura (unir, quitar, reasignar) se aplican en local primero y se sincronizan con YouTube cuando el usuario lo decide. La cuota de YouTube solo se consume en el momento de subir.
+- **Listas especiales de YouTube**: los IDs con prefijo `FL` (Favoritos), `WL` (Ver más tarde), `LL` y `RD` no se pueden borrar vía API — se detectan en `IsSpecialPlaylist()` del backend y se omiten del paso de eliminación al subir una unión, evitando que la entrada quede bloqueada permanentemente en la cola.
 - **Cuotas API**: YouTube Data API tiene 10.000 unidades/día por defecto. Listar es barato (1 unidad), insertar/borrar items cuesta ~50.
 - **UserKey estable**: la clave de usuario para la cache se deriva del `RefreshToken` (no del `AccessToken`, que rota cada hora) — evita fragmentar la cache entre sesiones.
+- **Command palette** (`Ctrl+K`): búsqueda local sin cuota. Playlists se filtran client-side; canciones se buscan en cache vía `POST /api/songs/search`. La navegación a una canción usa **router state** (sin query params) para pre-cargar el modo "Por canción" al llegar a `/organizar`.
+- **Skeleton loading**: efecto shimmer CSS (`@keyframes shimmer`, `background-size: 600px`) en todos los estados de carga de listas y canciones.
+- **BEM en CSS**: todas las clases siguen la convención Bloque__Elemento--Modificador. Cero `style=""` inline en las plantillas HTML — todos los estilos están en `styles.css` con clases semánticas (`card--selected`, `card__check`, `cmd-palette__item--active`, `cross-org__song-row`, etc.).
 - **Iconos**: [Font Awesome 6](https://fontawesome.com/) Free vía CDN (sólido + marcas).
 - **Diseño "midnight studio"**: fondo tinta + acento lima `#c6f24e`, tipografías Bricolage Grotesque y Hanken Grotesk, design tokens CSS.
 
