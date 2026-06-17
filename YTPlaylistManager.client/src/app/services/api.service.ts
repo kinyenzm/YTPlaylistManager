@@ -60,8 +60,9 @@ export class ApiService {
   pendingUploads(): Observable<PendingUpload[]> {
     return this.http.get<PendingUpload[]>(`${this.base}/playlists/pending-uploads`);
   }
-  uploadPending(id: string): Observable<UploadResult> {
-    return this.http.post<UploadResult>(`${this.base}/playlists/pending-uploads/${id}/upload`, {});
+  uploadPending(id: string, limit?: number): Observable<UploadResult> {
+    const params = limit != null ? `?limit=${limit}` : '';
+    return this.http.post<UploadResult>(`${this.base}/playlists/pending-uploads/${id}/upload${params}`, {});
   }
   discardPending(id: string): Observable<unknown> {
     return this.http.delete(`${this.base}/playlists/pending-uploads/${id}`);

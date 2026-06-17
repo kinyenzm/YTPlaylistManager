@@ -141,10 +141,37 @@ import { PendingSongMove, PendingUpload } from '../../models/models';
 
     @if (busyId() !== null) {
       <div class="busy-overlay">
-        <div class="busy-card">
-          <h4>{{ 'playlists.merge_busy_title' | translate }}</h4>
-          <div class="progress indeterminate"><div class="bar"></div></div>
-          <p class="muted" style="margin:12px 0 0">{{ 'playlists.merge_busy_desc' | translate }}</p>
+        <div class="busy-card" style="min-width:360px;max-width:520px;text-align:left">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <i class="fa-solid fa-cloud-arrow-up" style="color:var(--accent2);font-size:1.3rem"></i>
+            <h4 style="margin:0">{{ 'playlists.merge_busy_title' | translate }}</h4>
+          </div>
+          @if (uploadProgress(); as p) {
+            <div class="progress" style="margin:0 0 10px">
+              <div class="bar" [style.width.%]="(p.current / p.total) * 100"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+              <span style="font-size:0.82em;color:var(--muted)">{{ p.current }}/{{ p.total }}</span>
+              <span style="font-size:0.82em;color:var(--accent2);font-weight:600">{{ p.pct }}%</span>
+            </div>
+            <div style="background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+              <div style="font-size:0.78em;color:var(--muted);margin-bottom:3px">
+                <i class="fa-solid fa-arrow-up-from-bracket"></i> Subiendo…
+              </div>
+              <div style="font-size:0.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.title }}</div>
+            </div>
+            @if (recentUploads().length > 0) {
+              <div style="font-size:0.78em;color:var(--muted);margin-bottom:4px">Recientes:</div>
+              @for (r of recentUploads(); track r) {
+                <div style="font-size:0.82em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                  <i class="fa-solid fa-check" style="color:var(--accent2);margin-right:4px"></i>{{ r }}
+                </div>
+              }
+            }
+          } @else {
+            <div class="progress indeterminate"><div class="bar"></div></div>
+          }
+          <p class="muted" style="margin:12px 0 0;font-size:0.82em">{{ 'playlists.merge_busy_desc' | translate }}</p>
         </div>
       </div>
     }
@@ -158,6 +185,8 @@ export class PendingChanges implements OnDestroy {
   protected readonly busyId = signal<string | null>(null);
   protected readonly msg = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
+  protected readonly uploadProgress = signal<{ current: number; total: number; title: string; pct: number } | null>(null);
+  protected readonly recentUploads = signal<string[]>([]);
 
   private readonly poll = setInterval(() => this.svc.refresh(), 30_000);
 
@@ -177,9 +206,18 @@ export class PendingChanges implements OnDestroy {
 
   private done(): void {
     this.busyId.set(null);
+    this.recentUploads.set([]);
     this.api.refreshQuota();
     this.svc.refresh();
     this.svc.bump();
+  }
+
+  private setProgress(current: number, total: number, title: string): void {
+    const pct = total > 0 ? Math.round((current / total) * 100) : 100;
+    this.uploadProgress.set({ current, total, title, pct });
+    if (current > 0 && title !== '…') {
+      this.recentUploads.update(prev => [title, ...prev].slice(0, 4));
+    }
   }
 
   private fail(e: { status?: number }): void {
@@ -191,7 +229,7 @@ export class PendingChanges implements OnDestroy {
     );
   }
 
-  uploadMerge(pu: PendingUpload): void {
+  async uploadMerge(pu: PendingUpload): Promise<void> {
     const confirmMsg = this.translate.instant('playlists.upload_confirm', {
       songs: pu.itemCount,
       sources: pu.sourceTitles.join(', ') || '—',
@@ -200,16 +238,31 @@ export class PendingChanges implements OnDestroy {
     this.busyId.set(pu.id);
     this.msg.set(null);
     this.error.set(null);
-    this.api.uploadPending(pu.id).subscribe({
-      next: (r) => {
-        let m = this.translate.instant('playlists.upload_done', { uploaded: r.uploaded });
-        if (r.deletedSources > 0) m += ' ' + this.translate.instant('playlists.upload_deleted', { n: r.deletedSources });
-        if (r.paused) m += ' ' + this.translate.instant('playlists.upload_paused', { remaining: r.remainingPending, sources: r.remainingSources });
-        this.msg.set(m);
-        this.done();
-      },
-      error: (e) => this.fail(e),
-    });
+    const total = pu.itemCount;
+    try {
+      let totalUploaded = 0;
+      let idx = 0;
+      while (true) {
+        const songTitle = pu.items[idx]?.title ?? '…';
+        this.setProgress(totalUploaded, Math.max(total, 1), songTitle);
+        const r = await firstValueFrom(this.api.uploadPending(pu.id, total > 0 ? 1 : undefined));
+        totalUploaded += r.uploaded;
+        idx++;
+        this.setProgress(totalUploaded, Math.max(total, 1), songTitle);
+        if (r.paused || r.remainingPending === 0) {
+          let m = this.translate.instant('playlists.upload_done', { uploaded: totalUploaded });
+          if (r.deletedSources > 0) m += ' ' + this.translate.instant('playlists.upload_deleted', { n: r.deletedSources });
+          if (r.paused) m += ' ' + this.translate.instant('playlists.upload_paused', { remaining: r.remainingPending, sources: r.remainingSources });
+          this.msg.set(m);
+          break;
+        }
+      }
+    } catch (e) {
+      this.fail(e as { status?: number });
+    } finally {
+      this.uploadProgress.set(null);
+      this.done();
+    }
   }
 
   discardMerge(id: string): void {
@@ -257,15 +310,28 @@ export class PendingChanges implements OnDestroy {
     try {
       let paused = false;
       for (const pu of this.svc.uploads()) {
-        const r = await firstValueFrom(this.api.uploadPending(pu.id));
-        this.api.refreshQuota();
-        parts.push(this.translate.instant('playlists.upload_done', { uploaded: r.uploaded }));
-        if (r.deletedSources > 0) parts.push(this.translate.instant('playlists.upload_deleted', { n: r.deletedSources }));
-        if (r.paused) {
-          parts.push(this.translate.instant('playlists.upload_paused', { remaining: r.remainingPending, sources: r.remainingSources }));
-          paused = true;
-          break;
+        const total = pu.itemCount;
+        let totalUploaded = 0;
+        let idx = 0;
+        while (true) {
+          const title = pu.items[idx]?.title ?? '…';
+          this.setProgress(totalUploaded, Math.max(total, 1), title);
+          const r = await firstValueFrom(this.api.uploadPending(pu.id, total > 0 ? 1 : undefined));
+          totalUploaded += r.uploaded;
+          idx++;
+          this.setProgress(totalUploaded, Math.max(total, 1), title);
+          this.api.refreshQuota();
+          if (r.paused || r.remainingPending === 0) {
+            parts.push(this.translate.instant('playlists.upload_done', { uploaded: totalUploaded }));
+            if (r.deletedSources > 0) parts.push(this.translate.instant('playlists.upload_deleted', { n: r.deletedSources }));
+            if (r.paused) {
+              parts.push(this.translate.instant('playlists.upload_paused', { remaining: r.remainingPending, sources: r.remainingSources }));
+              paused = true;
+            }
+            break;
+          }
         }
+        if (paused) break;
       }
       if (!paused && this.svc.moves().length > 0) {
         const br = await firstValueFrom(this.api.uploadAllSongMoves());
@@ -276,6 +342,7 @@ export class PendingChanges implements OnDestroy {
     } catch (e) {
       this.fail(e as { status?: number });
     } finally {
+      this.uploadProgress.set(null);
       this.done();
     }
   }
