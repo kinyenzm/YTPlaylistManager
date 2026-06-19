@@ -33,7 +33,8 @@ yarn-error.log
 # =====================
 # IDEs / OS
 # =====================
-.vscode/
+.vscode/*.vsix
+.vscode/settings.json
 .idea/
 .claude/
 .playwright-mcp/
