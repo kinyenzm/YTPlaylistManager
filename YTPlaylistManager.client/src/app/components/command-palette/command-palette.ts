@@ -10,113 +10,31 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { LowerCasePipe } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 import { Playlist, SongSearchResult } from '../../models/models';
+
+type GroupedSong = SongSearchResult & { playlistTitles: string[] };
 
 type PaletteItem =
   | { kind: 'playlist'; data: Playlist }
-  | { kind: 'song'; data: SongSearchResult };
+  | { kind: 'song'; data: GroupedSong };
 
 @Component({
   selector: 'app-command-palette',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
-  template: `
-    @if (open()) {
-      <div class="cmd-palette__backdrop" (click)="close()">
-        <div class="cmd-palette__panel" (click)="$event.stopPropagation()">
-
-          <div class="cmd-palette__input-row">
-            <i class="fa-solid fa-magnifying-glass cmd-palette__icon--search"></i>
-            <input
-              id="cp-input"
-              class="cmd-palette__input"
-              [value]="rawQuery()"
-              (input)="onQuery($any($event.target).value)"
-              (keydown)="onKey($event)"
-              placeholder="Playlist, canción, canal o video ID…"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            @if (loading()) {
-              <i class="fa-solid fa-circle-notch fa-spin cmd-palette__icon--spin"></i>
-            } @else if (rawQuery().length > 0) {
-              <button class="cmd-palette__clear" (click)="onQuery('')" tabindex="-1">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
-            } @else {
-              <span class="cmd-palette__kbd">Esc</span>
-            }
-          </div>
-
-          <div class="cmd-palette__results">
-            @if (allItems().length === 0 && rawQuery().trim().length > 0 && !loading()) {
-              <div class="cmd-palette__empty">Sin resultados para «{{ rawQuery() }}»</div>
-            }
-
-            @if (filteredPlaylists().length > 0) {
-              <div class="cmd-palette__section">Playlists</div>
-              @for (p of filteredPlaylists(); track p.id; let i = $index) {
-                <div
-                  class="cmd-palette__item"
-                  [class.cmd-palette__item--active]="activeIndex() === i"
-                  (mouseenter)="activeIndex.set(i)"
-                  (click)="selectPlaylist(p)">
-                  <img [src]="p.thumbnailUrl" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" />
-                  <div class="cmd-palette__item-body">
-                    <span class="cmd-palette__item-title">{{ p.title }}</span>
-                    <span class="cmd-palette__item-meta">{{ p.itemCount }} canciones</span>
-                  </div>
-                  <i class="fa-solid fa-list cmd-palette__item-kind"></i>
-                </div>
-              }
-            }
-
-            @if (songs().length > 0) {
-              <div class="cmd-palette__section">Canciones</div>
-              @for (s of songs(); track s.videoId; let i = $index) {
-                <div
-                  class="cmd-palette__item"
-                  [class.cmd-palette__item--active]="activeIndex() === filteredPlaylists().length + i"
-                  (mouseenter)="activeIndex.set(filteredPlaylists().length + i)"
-                  (click)="selectSong(s)">
-                  <img [src]="thumbUrl(s.videoId)" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" />
-                  <div class="cmd-palette__item-body">
-                    <span class="cmd-palette__item-title">{{ s.title }}</span>
-                    <span class="cmd-palette__item-meta">{{ s.channelTitle }} · {{ s.currentPlaylistTitle || s.originalPlaylistTitle }}</span>
-                  </div>
-                  @if (s.appearsInCount > 1) {
-                    <span class="cmd-palette__badge">×{{ s.appearsInCount }}</span>
-                  }
-                  <i class="fa-brands fa-youtube cmd-palette__item-kind"></i>
-                </div>
-              }
-            }
-
-            @if (rawQuery().trim().length === 0) {
-              <div class="cmd-palette__empty">
-                Escribe para buscar · <kbd class="cmd-palette__kbd">↑↓</kbd> navegar · <kbd class="cmd-palette__kbd">↵</kbd> abrir
-              </div>
-            }
-          </div>
-
-          <div class="cmd-palette__footer">
-            <span><kbd class="cmd-palette__kbd">Ctrl K</kbd> abrir/cerrar</span>
-            <span><kbd class="cmd-palette__kbd">↑↓</kbd> navegar</span>
-            <span><kbd class="cmd-palette__kbd">↵</kbd> abrir</span>
-            <span><kbd class="cmd-palette__kbd">Esc</kbd> cerrar</span>
-          </div>
-        </div>
-      </div>
-    }
-  `,
+  imports: [FormsModule, LowerCasePipe, TranslateModule],
+  templateUrl: './command-palette.html',
 })
 export class CommandPalette implements OnDestroy {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
 
   protected readonly open = signal(false);
   protected readonly rawQuery = signal('');
@@ -140,9 +58,25 @@ export class CommandPalette implements OnDestroy {
       .slice(0, 6);
   });
 
+  protected readonly groupedSongs = computed<GroupedSong[]>(() => {
+    const map = new Map<string, GroupedSong>();
+    for (const s of this.songs()) {
+      const title = s.currentPlaylistTitle || s.originalPlaylistTitle;
+      if (map.has(s.videoId)) {
+        const entry = map.get(s.videoId)!;
+        if (title && !entry.playlistTitles.includes(title)) {
+          entry.playlistTitles.push(title);
+        }
+      } else {
+        map.set(s.videoId, { ...s, playlistTitles: title ? [title] : [] });
+      }
+    }
+    return [...map.values()];
+  });
+
   protected readonly allItems = computed<PaletteItem[]>(() => [
     ...this.filteredPlaylists().map(p => ({ kind: 'playlist' as const, data: p })),
-    ...this.songs().map(s => ({ kind: 'song' as const, data: s })),
+    ...this.groupedSongs().map(s => ({ kind: 'song' as const, data: s })),
   ]);
 
   constructor() {
@@ -175,7 +109,7 @@ export class CommandPalette implements OnDestroy {
       distinctUntilChanged(),
       switchMap(q => {
         const trimmed = q.trim();
-        if (trimmed.length < 2) {
+        if (trimmed.length < 2 || !this.auth.connected()) {
           this.songs.set([]);
           this.loading.set(false);
           return of(null);
@@ -205,9 +139,14 @@ export class CommandPalette implements OnDestroy {
     this.songs.set([]);
     this.activeIndex.set(0);
     this.loading.set(false);
-    this.api.listPlaylists(false, false).subscribe(ps => {
-      this.allPlaylists = ps;
-    });
+    // Sin sesión no se cargan listas (el palette abre pero queda vacío).
+    if (this.auth.connected()) {
+      this.api.listPlaylists(false, false).subscribe(ps => {
+        this.allPlaylists = ps;
+      });
+    } else {
+      this.allPlaylists = [];
+    }
     setTimeout(() => (document.getElementById('cp-input') as HTMLInputElement | null)?.focus(), 40);
   }
 
@@ -235,7 +174,7 @@ export class CommandPalette implements OnDestroy {
 
   selectSong(s: SongSearchResult): void {
     this.close();
-    this.router.navigate(['/organizar'], { state: { q: s.videoId } });
+    this.router.navigate(['/organizar'], { queryParams: { q: s.videoId } });
   }
 
   private selectActive(): void {

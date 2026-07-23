@@ -1,0 +1,45 @@
+@if (auth.sessionExpired()) {
+  <div class="session-toast" role="alert">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span>{{ 'auth.session_expired_toast' | translate }}</span>
+    <a [href]="loginUrl"><button>{{ 'app.nav.login' | translate }}</button></a>
+    <button class="secondary session-toast__close" (click)="auth.dismissExpired()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+  </div>
+}
+<header class="app-header">
+  <div class="app-header__brand">
+    <h2><a routerLink="/">{{ 'app.title' | translate }}</a></h2>
+    @if (quota(); as q) {
+      <span class="app-header__quota"
+            [class.app-header__quota--critical]="q.remaining < 500"
+            [title]="'app.nav.quota_title' | translate">
+        {{ q.remaining }}/{{ q.limit }}
+      </span>
+    }
+  </div>
+
+  <button class="secondary app-header__search-btn" (click)="triggerPalette()">
+    <i class="fa-solid fa-magnifying-glass app-header__search-icon"></i>
+    <span class="app-header__search-ph">{{ 'app.search_ph' | translate }}</span>
+    <kbd class="app-header__search-kbd">Ctrl K</kbd>
+  </button>
+
+  <div class="app-header__nav">
+    @if (auth.connected()) {
+      <a [routerLink]="navPaths().cross">{{ 'app.nav.cross_dups' | translate }}</a>
+      <a [routerLink]="navPaths().cache">{{ 'app.nav.cache' | translate }}</a>
+      <span class="muted">{{ 'app.nav.connected' | translate }}</span>
+      <button class="secondary" (click)="logout()">{{ 'app.nav.logout' | translate }}</button>
+    } @else {
+      <a [href]="loginUrl"><button>{{ 'app.nav.login' | translate }}</button></a>
+    }
+    <app-lang-switcher />
+  </div>
+</header>
+<main>
+  <router-outlet />
+</main>
+<app-pending-changes />
+<app-command-palette />

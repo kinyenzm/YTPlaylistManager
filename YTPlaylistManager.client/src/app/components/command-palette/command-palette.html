@@ -1,0 +1,98 @@
+@if (open()) {
+  <div class="cmd-palette__backdrop" (click)="close()">
+    <div class="cmd-palette__panel" (click)="$event.stopPropagation()">
+
+      <div class="cmd-palette__input-row">
+        <i class="fa-solid fa-magnifying-glass cmd-palette__icon--search"></i>
+        <input
+          id="cp-input"
+          class="cmd-palette__input"
+          [value]="rawQuery()"
+          (input)="onQuery($any($event.target).value)"
+          (keydown)="onKey($event)"
+          [placeholder]="'cmd.placeholder' | translate"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        @if (loading()) {
+          <i class="fa-solid fa-circle-notch fa-spin cmd-palette__icon--spin"></i>
+        } @else if (rawQuery().length > 0) {
+          <button class="cmd-palette__clear" (click)="onQuery('')" tabindex="-1">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        } @else {
+          <span class="cmd-palette__kbd">Esc</span>
+        }
+      </div>
+
+      <div class="cmd-palette__results">
+        @if (loading()) {
+          @for (_ of [1,2,3,4]; track $index) {
+            <div class="cmd-palette__item cmd-palette__item--skeleton">
+              <span class="skeleton skeleton--thumb"></span>
+              <div class="cmd-palette__item-body" style="gap:5px">
+                <span class="skeleton skeleton--title" style="width:55%"></span>
+                <span class="skeleton skeleton--text" style="width:35%"></span>
+              </div>
+            </div>
+          }
+        }
+        @if (allItems().length === 0 && rawQuery().trim().length > 0 && !loading()) {
+          <div class="cmd-palette__empty">{{ 'cmd.empty' | translate:{ q: rawQuery() } }}</div>
+        }
+
+        @if (filteredPlaylists().length > 0) {
+          <div class="cmd-palette__section">{{ 'cmd.section_playlists' | translate }}</div>
+          @for (p of filteredPlaylists(); track p.id; let i = $index) {
+            <div
+              class="cmd-palette__item"
+              [class.cmd-palette__item--active]="activeIndex() === i"
+              (mouseenter)="activeIndex.set(i)"
+              (click)="selectPlaylist(p)">
+              <img [src]="p.thumbnailUrl" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" />
+              <div class="cmd-palette__item-body">
+                <span class="cmd-palette__item-title">{{ p.title }}</span>
+                <span class="cmd-palette__item-meta">{{ p.itemCount }} {{ 'cmd.section_songs' | translate | lowercase }}</span>
+              </div>
+              <i class="fa-solid fa-list cmd-palette__item-kind cmd-palette__item-kind--playlist"></i>
+            </div>
+          }
+        }
+
+        @if (groupedSongs().length > 0) {
+          <div class="cmd-palette__section">{{ 'cmd.section_songs' | translate }}</div>
+          @for (s of groupedSongs(); track s.videoId; let i = $index) {
+            <div
+              class="cmd-palette__item"
+              [class.cmd-palette__item--active]="activeIndex() === filteredPlaylists().length + i"
+              (mouseenter)="activeIndex.set(filteredPlaylists().length + i)"
+              (click)="selectSong(s)">
+              <img [src]="thumbUrl(s.videoId)" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" />
+              <div class="cmd-palette__item-body">
+                <span class="cmd-palette__item-title">{{ s.title }}</span>
+                <span class="cmd-palette__item-meta">{{ s.channelTitle }}</span>
+                @if (s.playlistTitles.length > 0) {
+                  <span class="cmd-palette__item-playlists">{{ s.playlistTitles.join(' · ') }}</span>
+                }
+              </div>
+              <i class="fa-brands fa-youtube cmd-palette__item-kind cmd-palette__item-kind--song"></i>
+            </div>
+          }
+        }
+
+        @if (rawQuery().trim().length === 0) {
+          <div class="cmd-palette__empty">
+            {{ 'cmd.hint' | translate }} · <kbd class="cmd-palette__kbd">↑↓</kbd> {{ 'cmd.footer_nav' | translate }} · <kbd class="cmd-palette__kbd">↵</kbd> {{ 'cmd.footer_open' | translate }}
+          </div>
+        }
+      </div>
+
+      <div class="cmd-palette__footer">
+        <span><kbd class="cmd-palette__kbd">Ctrl K</kbd> {{ 'cmd.footer_toggle' | translate }}</span>
+        <span><kbd class="cmd-palette__kbd">↑↓</kbd> {{ 'cmd.footer_nav' | translate }}</span>
+        <span><kbd class="cmd-palette__kbd">↵</kbd> {{ 'cmd.footer_open' | translate }}</span>
+        <span><kbd class="cmd-palette__kbd">Esc</kbd> {{ 'cmd.footer_close' | translate }}</span>
+      </div>
+    </div>
+  </div>
+}

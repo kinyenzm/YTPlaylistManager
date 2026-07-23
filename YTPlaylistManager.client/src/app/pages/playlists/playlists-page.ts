@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import { Playlist, MergeResult, MergePreview } from '../../models/models';
 
@@ -23,6 +24,12 @@ export class PlaylistsPage implements OnInit {
   private readonly api = inject(ApiService);
   private readonly translate = inject(TranslateService);
   private readonly pending = inject(PendingService);
+  private readonly auth = inject(AuthService);
+
+  // Estado de sesión compartido (AuthService); antes esta página hacía su propia
+  // llamada a /auth/status duplicando el estado del shell.
+  protected readonly authChecked = this.auth.checked;
+  protected readonly authenticated = this.auth.connected;
 
   constructor() {
     // Recargar las listas cuando el panel global sube/descarta cambios
@@ -30,6 +37,22 @@ export class PlaylistsPage implements OnInit {
     effect(() => {
       if (this.pending.mutations() === 0) return;
       untracked(() => this.load());
+    });
+
+    // Cargar con sesión; al desconectar, limpiar (sin sesión no se muestra caché).
+    effect(() => {
+      if (this.authenticated()) {
+        untracked(() => {
+          this.load();
+          this.pending.refresh();
+        });
+      } else {
+        untracked(() => {
+          this.playlists.set([]);
+          this.selectedIds.set(new Set());
+          this.loading.set(false);
+        });
+      }
     });
   }
 
@@ -81,9 +104,6 @@ export class PlaylistsPage implements OnInit {
     return rtf.format(Math.round(hours / 24), 'day');
   }
 
-  protected readonly authChecked = signal(false);
-  protected readonly authenticated = signal(false);
-
   protected readonly refreshConfirmOpen = signal(false);
   protected readonly refreshing = signal(false);
   protected readonly refreshResult = signal<RefreshAllResult | null>(null);
@@ -95,19 +115,9 @@ export class PlaylistsPage implements OnInit {
   });
 
   ngOnInit(): void {
-    this.api.authStatus().subscribe({
-      next: (s) => {
-        this.authenticated.set(s.isAuthenticated);
-        this.authChecked.set(true);
-        if (s.isAuthenticated) {
-          this.load();
-          this.pending.refresh();
-        } else {
-          this.loading.set(false);
-        }
-      },
-      error: () => { this.authChecked.set(true); this.loading.set(false); },
-    });
+    // La carga inicial la maneja el effect sobre authenticated(); si el shell aún
+    // no verificó la sesión, evitamos el skeleton infinito.
+    if (!this.auth.checked()) this.loading.set(true);
   }
 
   load(refresh = false): void {

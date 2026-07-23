@@ -41,4 +41,11 @@ export class PendingService {
   bump(): void {
     this.mutations.update((v) => v + 1);
   }
+
+  // Al desconectar: sin sesión no hay pendientes que mostrar ni panel abierto.
+  clear(): void {
+    this.uploads.set([]);
+    this.moves.set([]);
+    this.open.set(false);
+  }
 }
