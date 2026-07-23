@@ -10,7 +10,17 @@
   <p class="muted">{{ 'cache.intro' | translate }}</p>
 
   @if (isLoading()) {
-    <p class="muted">{{ 'cache.loading' | translate }}</p>
+    <div class="grid" style="margin-bottom:16px">
+      @for (_ of [1,2,3,4]; track $index) {
+        <div class="stat-card">
+          <span class="skeleton" style="width:36px;height:36px;border-radius:6px;flex-shrink:0"></span>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+            <span class="skeleton skeleton--text" style="width:60%"></span>
+            <span class="skeleton skeleton--title" style="width:40%"></span>
+          </div>
+        </div>
+      }
+    </div>
   }
   @if (error()) {
     <p class="danger">{{ error() }}</p>

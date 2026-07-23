@@ -139,12 +139,38 @@ header.app-header h2 a:hover::before {
 .app-header__search-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  padding: 5px 12px;
+  gap: 10px;
+  font-size: 0.88rem;
+  padding: 9px 14px;
   justify-self: center;
+  min-width: 300px;
+  max-width: 460px;
+  width: 100%;
+  border-radius: 10px;
+  justify-content: flex-start;
 }
-.app-header__search-hint { color: var(--muted); font-size: 0.78rem; }
+.app-header__search-icon { color: var(--muted); flex-shrink: 0; }
+.app-header__search-ph { flex: 1; text-align: left; color: var(--muted); font-weight: 400; }
+.app-header__search-hint { display: none; }
+.app-header__search-kbd {
+  font-size: 0.7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+  color: var(--muted);
+  font-family: var(--font-body);
+  flex-shrink: 0;
+}
+.lang-select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.85rem;
+  padding: 5px 8px;
+  cursor: pointer;
+}
 .app-header__nav {
   display: flex;
   align-items: center;
@@ -428,6 +454,75 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .tag--editable:hover .tag__remove-btn { opacity: 1; }
 .tag--staged-out { text-decoration: line-through; opacity: .55; }
 .tag--staged-out .tag__remove-btn { opacity: 1; }
+.tag--staged-added {
+  border: 1px dashed rgba(198, 242, 78, 0.5);
+  color: var(--accent2);
+  background: rgba(198, 242, 78, 0.08);
+}
+.cross-org__draft-bar {
+  position: sticky; bottom: 12px; z-index: 50;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 12px 16px; margin-top: 14px;
+  /* deja libre la esquina del chip flotante de pendientes */
+  margin-left: 64px;
+  background: var(--panel-2);
+  border: 1px solid rgba(198, 242, 78, 0.35);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+}
+.cross-org__draft-badge {
+  font-size: 0.76rem; color: var(--accent2);
+  border: 1px solid rgba(198, 242, 78, 0.35); border-radius: 999px;
+  padding: 1px 8px;
+}
+.link-btn {
+  background: none; border: none; padding: 0;
+  color: var(--muted); text-decoration: underline; cursor: pointer;
+  font-size: 0.82rem; font-weight: 500;
+}
+.link-btn:hover {
+  color: var(--text);
+  background: none; transform: none; box-shadow: none;
+}
+/* Toast fijo de sesión expirada (interceptor 401) */
+.session-toast {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 1300;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  max-width: min(94vw, 560px);
+}
+.session-toast > i { color: var(--accent); }
+.session-toast__close { padding: 2px 10px; }
+
+/* Chip flotante de pendientes: solo icono; el texto se expande al hover para no
+   tapar la barra de borradores del organizador. */
+.pending-chip {
+  position: fixed; left: 16px; bottom: 16px; z-index: 1100;
+  display: flex; align-items: center;
+  border-radius: 999px; padding: 13px 15px;
+  box-shadow: var(--shadow-lg);
+}
+.pending-chip__count {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center;
+  background: #d33; color: #fff;
+  border-radius: 999px; font-size: 0.68rem; font-weight: 700;
+}
+.pending-chip__label {
+  max-width: 0; overflow: hidden; white-space: nowrap;
+  opacity: 0; margin-left: 0;
+  transition: max-width .25s ease, opacity .2s ease, margin-left .25s ease;
+}
+.pending-chip:hover .pending-chip__label,
+.pending-chip:focus-visible .pending-chip__label {
+  max-width: 280px; opacity: 1; margin-left: 8px;
+}
 .tag--dup-count {
   background: #d33; color: #fff; border-radius: 999px;
   padding: 2px 8px; font-size: .8em; font-weight: 700; flex-shrink: 0;
@@ -509,7 +604,15 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   margin-top: 1px;
 }
-.cmd-palette__item-kind { color: var(--muted); font-size: 0.78rem; flex-shrink: 0; }
+.cmd-palette__item-playlists {
+  display: block; font-size: 0.72rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0.65; margin-top: 1px;
+}
+.cmd-palette__item--skeleton { pointer-events: none; }
+.cmd-palette__item-kind { font-size: 0.88rem; flex-shrink: 0; }
+.cmd-palette__item-kind--playlist { color: var(--accent2); }
+.cmd-palette__item-kind--song { color: #ff4040; }
 .cmd-palette__badge {
   font-size: 0.72rem; background: rgba(198,242,78,0.15);
   color: var(--accent2); border-radius: 999px;
@@ -600,6 +703,11 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cross-org__list-picker    { margin-top: 12px; align-items: center; gap: 8px; }
 .cross-org__actions-card   { margin-top: 12px; }
 .cross-org__actions-row    { margin-top: 8px; }
+/* Barra de búsqueda bySong: nombre completo arriba, filtros finos abajo */
+.cross-org__search-bar { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.cross-org__search-main { font-size: 1.1rem; padding: 12px 16px; border-radius: 12px; }
+/* Icono sutil antes del canal y del label "Aparece en:" */
+.cross-org__meta-icon { font-size: 0.78em; opacity: 0.55; margin-right: 5px; }
 .cross-org__summary        { margin-top: 12px; }
 .cross-org__empty-card     { margin-top: 10px; }
 .cross-org__song-list      { margin-top: 12px; }

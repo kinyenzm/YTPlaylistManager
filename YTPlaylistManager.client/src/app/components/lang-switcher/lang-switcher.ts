@@ -1,5 +1,4 @@
 import { Component, ChangeDetectionStrategy, inject, signal, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 const STORAGE_KEY = 'ytpm.lang';
@@ -22,29 +21,8 @@ function detectInitialLang(): Lang {
 @Component({
   selector: 'app-lang-switcher',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule],
-  template: `
-    <select
-      class="lang-select"
-      [ngModel]="current()"
-      (ngModelChange)="onChange($event)"
-      [attr.aria-label]="'app.lang.label' | translate"
-    >
-      <option value="es">{{ 'app.lang.es' | translate }}</option>
-      <option value="en">{{ 'app.lang.en' | translate }}</option>
-    </select>
-  `,
-  styles: [`
-    .lang-select {
-      padding: 4px 8px;
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 0.85em;
-      cursor: pointer;
-    }
-  `],
+  imports: [TranslateModule],
+  templateUrl: './lang-switcher.html',
 })
 export class LangSwitcher implements OnInit {
   private readonly translate = inject(TranslateService);

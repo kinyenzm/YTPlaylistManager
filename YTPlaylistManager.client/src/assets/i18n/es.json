@@ -1,6 +1,7 @@
 {
   "app": {
     "title": "YT Playlist Manager",
+    "search_ph": "Buscar playlists y canciones…",
     "nav": {
       "cross_dups": "Organizar",
       "cache": "Historial",
@@ -16,6 +17,9 @@
       "en": "Inglés"
     }
   },
+  "auth": {
+    "session_expired_toast": "Tu sesión de Google expiró. Conectate de nuevo."
+  },
   "activity": {
     "added": "Agregada «{{title}}» → {{playlist}}",
     "removed": "Quitada «{{title}}» de {{playlist}}",
@@ -25,6 +29,8 @@
     "loading": "Cargando…",
     "error_generic": "Algo salió mal. Probá de nuevo.",
     "youtube_quota_exhausted": "YouTube llegó a su límite diario. Probá de nuevo cuando se renueve (cada día).",
+    "auth_expired": "La sesión de Google expiró. Cerrá sesión y volvé a conectarte.",
+    "upload_timeout": "La subida tardó demasiado. Revisá tu conexión e intentá de nuevo.",
     "cancel": "Cancelar",
     "confirm": "Confirmar",
     "back": "← Volver",
@@ -187,6 +193,16 @@
     "save_changes": "Guardar cambios ({{n}})",
     "badge_remove": "Quitar de esta lista",
     "badge_restore": "Restaurar",
+    "draft_count": "{{n}} canción(es) con cambios sin guardar",
+    "draft_save_all": "Guardar cambios",
+    "draft_saving": "Guardando…",
+    "draft_discard_all": "Descartar",
+    "draft_save_confirm": "¿Guardar los cambios de {{n}} canción(es) en la cola de pendientes?",
+    "draft_discard_confirm": "¿Descartar los cambios de {{n}} canción(es)?",
+    "draft_leave_confirm": "Tenés {{n}} cambio(s) sin guardar. ¿Guardarlos en la cola antes de salir?",
+    "draft_badge": "sin guardar",
+    "draft_undo": "Deshacer",
+    "connect_prompt": "Conectá con Google para organizar tus listas.",
     "unavailable_tag": "No disponible",
     "dups_in_list": "{{n}} repetidas"
   },
@@ -236,5 +252,16 @@
     "error_load": "No se pudieron cargar los datos: {{msg}}",
     "error_load_archived": "No se pudieron cargar las listas archivadas",
     "error_history": "No se pudo cargar el historial: {{msg}}"
+  },
+  "cmd": {
+    "placeholder": "Playlist, canción, canal o video ID…",
+    "empty": "Sin resultados para «{{q}}»",
+    "hint": "Escribí para buscar",
+    "section_playlists": "Playlists",
+    "section_songs": "Canciones",
+    "footer_toggle": "abrir/cerrar",
+    "footer_nav": "navegar",
+    "footer_open": "abrir",
+    "footer_close": "cerrar"
   }
 }

@@ -1,0 +1,8 @@
+<div class="segmented" [attr.aria-label]="'app.lang.label' | translate">
+  <button [class.active]="current() === 'es'" (click)="onChange('es')">
+    <img src="https://flagcdn.com/16x12/es.png" width="16" height="12" alt="ES"> ES
+  </button>
+  <button [class.active]="current() === 'en'" (click)="onChange('en')">
+    <img src="https://flagcdn.com/16x12/us.png" width="16" height="12" alt="EN"> EN
+  </button>
+</div>

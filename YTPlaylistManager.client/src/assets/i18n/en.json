@@ -1,6 +1,7 @@
 {
   "app": {
     "title": "YT Playlist Manager",
+    "search_ph": "Search playlists and songs…",
     "nav": {
       "cross_dups": "Organize",
       "cache": "History",
@@ -16,6 +17,9 @@
       "en": "English"
     }
   },
+  "auth": {
+    "session_expired_toast": "Your Google session expired. Please reconnect."
+  },
   "activity": {
     "added": "Added «{{title}}» → {{playlist}}",
     "removed": "Removed «{{title}}» from {{playlist}}",
@@ -25,6 +29,8 @@
     "loading": "Loading…",
     "error_generic": "Something went wrong. Please try again.",
     "youtube_quota_exhausted": "YouTube has reached its daily limit. Try again when it resets (every day).",
+    "auth_expired": "Your Google session has expired. Sign out and sign in again.",
+    "upload_timeout": "Upload timed out. Check your connection and try again.",
     "cancel": "Cancel",
     "confirm": "Confirm",
     "back": "← Back",
@@ -187,6 +193,16 @@
     "save_changes": "Save changes ({{n}})",
     "badge_remove": "Remove from this list",
     "badge_restore": "Restore",
+    "draft_count": "{{n}} song(s) with unsaved changes",
+    "draft_save_all": "Save changes",
+    "draft_saving": "Saving…",
+    "draft_discard_all": "Discard",
+    "draft_save_confirm": "Save changes for {{n}} song(s) to the pending queue?",
+    "draft_discard_confirm": "Discard changes for {{n}} song(s)?",
+    "draft_leave_confirm": "You have {{n}} unsaved change(s). Save them to the queue before leaving?",
+    "draft_badge": "unsaved",
+    "draft_undo": "Undo",
+    "connect_prompt": "Connect with Google to organize your playlists.",
     "unavailable_tag": "Unavailable",
     "dups_in_list": "{{n}} duplicates"
   },
@@ -236,5 +252,16 @@
     "error_load": "Error loading cache: {{msg}}",
     "error_load_archived": "Error loading archived playlists",
     "error_history": "Error loading song history: {{msg}}"
+  },
+  "cmd": {
+    "placeholder": "Playlist, song, channel or video ID…",
+    "empty": "No results for «{{q}}»",
+    "hint": "Type to search",
+    "section_playlists": "Playlists",
+    "section_songs": "Songs",
+    "footer_toggle": "open/close",
+    "footer_nav": "navigate",
+    "footer_open": "open",
+    "footer_close": "close"
   }
 }
