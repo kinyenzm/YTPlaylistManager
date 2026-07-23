@@ -62,25 +62,18 @@ public class YouTubeService : IYouTubeService
         _logger = logger;
     }
 
-    /// <summary>Clave estable por cuenta (hash del refresh token). No gasta cuota.</summary>
+    /// <summary>Clave estable por cuenta. No gasta cuota.</summary>
     private string CurrentUserKey()
     {
         var t = _tokenStore.Load();
-        // Solo el refresh token: el access token rota (~1h) y fragmentaría los datos
-        // de la misma cuenta en varias claves distintas (caché, pendientes, etc.).
-        var seed = t?.RefreshToken ?? "anon";
-        var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(seed));
-        return Convert.ToHexString(bytes)[..16];
+        // Preferencia: AccountId (channel id, estable entre logins). Fallback legado:
+        // refresh token — rota si Google emite uno nuevo y fragmenta los datos.
+        if (!string.IsNullOrEmpty(t?.AccountId)) return UserKeys.FromSeed(t.AccountId);
+        return UserKeys.FromSeed(t?.RefreshToken ?? "anon");
     }
 
     /// <summary>True si la excepción de Google es por cuota/límite de tasa (403).</summary>
-    private static bool IsQuotaError(Google.GoogleApiException ex)
-    {
-        if (ex.HttpStatusCode != System.Net.HttpStatusCode.Forbidden) return false;
-        var reason = ex.Error?.Errors?.FirstOrDefault()?.Reason;
-        return reason is "quotaExceeded" or "rateLimitExceeded" or "dailyLimitExceeded"
-            || (ex.Message?.Contains("quota", StringComparison.OrdinalIgnoreCase) ?? false);
-    }
+    private static bool IsQuotaError(Google.GoogleApiException ex) => QuotaTracker.IsQuotaError(ex);
 
     // Playlists especiales de YouTube (FL=Favoritos, WL=Ver más tarde, LL=Me gusta, RD=Mezcla)
     // que la API no permite borrar. Si una lista origen tiene este prefijo, la omitimos en lugar
@@ -318,15 +311,27 @@ public class YouTubeService : IYouTubeService
 
     public async Task<DuplicateReportDto> FindDuplicatesAsync(string playlistId, CancellationToken ct = default)
     {
-        var yt = BuildClient();
-        var playlistReq = yt.Playlists.List("snippet");
-        playlistReq.Id = playlistId;
-        var pResp = await playlistReq.ExecuteAsync(ct);
-        _quota.Add(1);
-        var playlistTitle = pResp.Items.FirstOrDefault()?.Snippet.Title ?? playlistId;
+        // El título es decorativo: si su fetch falla (cuota, 404, red) se usa el id
+        // como fallback en vez de tumbar toda la detección de duplicados.
+        var playlistTitle = playlistId;
+        try
+        {
+            var yt = BuildClient();
+            var playlistReq = yt.Playlists.List("snippet");
+            playlistReq.Id = playlistId;
+            var pResp = await playlistReq.ExecuteAsync(ct);
+            _quota.Add(1);
+            playlistTitle = pResp.Items.FirstOrDefault()?.Snippet.Title ?? playlistId;
+        }
+        catch (Google.GoogleApiException ex)
+        {
+            if (QuotaTracker.IsQuotaError(ex)) _quota.MarkExhausted();
+            _logger.LogWarning(ex, "No se pudo leer el título de {Playlist}; se usa el id.", playlistId);
+        }
 
         // Detección precisa: re-leemos los items DESDE YouTube (no de la caché, que puede
         // estar desincronizada por remociones locales no subidas). Esto refresca la caché.
+        // Si ESTO falla, la excepción sube al middleware global (403 cuota / 404 / etc.).
         var items = await GetPlaylistItemsAsync(playlistId, ct, forceRefresh: true);
 
         var groups = new List<DuplicateGroupDto>();
@@ -672,6 +677,7 @@ public class YouTubeService : IYouTubeService
             }
             catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
             {
+                _quota.MarkExhausted();
                 paused = true;
                 remaining.Add(item);
             }
@@ -740,6 +746,7 @@ public class YouTubeService : IYouTubeService
                 }
                 catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
                 {
+                    _quota.MarkExhausted();
                     paused = true;
                     stillPending.Add(s);
                 }
@@ -949,7 +956,7 @@ public class YouTubeService : IYouTubeService
                 realIdByLocal[t.LocalItemId] = inserted.Id;
                 added++;
             }
-            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { paused = true; addRem.Add(t); }
+            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; addRem.Add(t); }
             catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo agregar {Video} a {Pl}.", move.VideoId, t.PlaylistId); failed++; }
         }
         foreach (var r in move.RemoveFrom)
@@ -962,7 +969,7 @@ public class YouTubeService : IYouTubeService
                 _activity.Publish(new ActivityEvent("delete", move.Title, r.PlaylistTitle, move.VideoId, DateTime.UtcNow));
                 removed++;
             }
-            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { paused = true; remRem.Add(r); }
+            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; remRem.Add(r); }
             catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) { removed++; }
             catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo quitar {Item} de {Pl}.", r.PlaylistItemId, r.PlaylistId); failed++; }
         }

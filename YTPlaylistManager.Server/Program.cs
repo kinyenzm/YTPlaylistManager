@@ -41,7 +41,7 @@ switch (aiProvider)
 }
 
 var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? new[] { "http://localhost:4200" };
+    ?? ["http://localhost:4200"];
 
 builder.Services.AddCors(opts =>
 {

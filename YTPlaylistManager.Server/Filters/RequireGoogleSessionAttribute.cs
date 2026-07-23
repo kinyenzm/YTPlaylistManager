@@ -16,7 +16,7 @@ public sealed class RequireGoogleSessionAttribute : Attribute, IAsyncActionFilte
         var store = context.HttpContext.RequestServices.GetRequiredService<GoogleTokenStore>();
         var token = store.Load();
 
-        if (token is null || string.IsNullOrEmpty(token.AccessToken))
+        if (token is null || !token.HasUsableSession)
         {
             context.Result = new ObjectResult(new
             {

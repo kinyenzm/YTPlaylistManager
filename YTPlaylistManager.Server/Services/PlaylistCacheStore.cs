@@ -44,6 +44,22 @@ public class PlaylistCacheStore
             if (File.Exists(_path)) File.Delete(_path);
         }
     }
+
+    /// <summary>Re-etiqueta la caché a la clave nueva (migración de UserKey).</summary>
+    public void MigrateToKey(string newKey)
+    {
+        lock (_lock)
+        {
+            var cache = Load();
+            if (cache is null || cache.UserKey == newKey) return;
+            Save(new PlaylistCache
+            {
+                UserKey = newKey,
+                CachedAtUtc = cache.CachedAtUtc,
+                Playlists = cache.Playlists,
+            });
+        }
+    }
 }
 
 public sealed class PlaylistCache

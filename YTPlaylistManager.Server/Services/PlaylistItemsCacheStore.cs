@@ -68,6 +68,36 @@ public class PlaylistItemsCacheStore
         }
     }
 
+    /// <summary>
+    /// Fusiona TODAS las claves bajo <paramref name="newKey"/> (app single-user: toda
+    /// clave preexistente pertenece al mismo humano). Ante playlistId repetido gana la
+    /// entrada con más items; empate → la más reciente. Elimina las claves viejas.
+    /// </summary>
+    public void MigrateToKey(string newKey)
+    {
+        lock (_lock)
+        {
+            var all = LoadAllUnlocked();
+            if (all.Count == 0 || (all.Count == 1 && all.ContainsKey(newKey))) return;
+
+            var merged = all.TryGetValue(newKey, out var existing) ? existing : [];
+            foreach (var (key, byPlaylist) in all)
+            {
+                if (key == newKey) continue;
+                foreach (var (playlistId, entry) in byPlaylist)
+                {
+                    if (!merged.TryGetValue(playlistId, out var cur)
+                        || entry.Items.Count > cur.Items.Count
+                        || (entry.Items.Count == cur.Items.Count && entry.CachedAtUtc > cur.CachedAtUtc))
+                    {
+                        merged[playlistId] = entry;
+                    }
+                }
+            }
+            SaveAll(new Dictionary<string, Dictionary<string, CachedItems>> { [newKey] = merged });
+        }
+    }
+
     private Dictionary<string, Dictionary<string, CachedItems>> LoadAllUnlocked()
     {
         if (!File.Exists(_path)) return [];

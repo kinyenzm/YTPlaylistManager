@@ -66,6 +66,18 @@ public class PendingUploadStore
         }
     }
 
+    /// <summary>Reasigna todos los registros a la clave nueva (migración de UserKey).</summary>
+    public void MigrateToKey(string newKey)
+    {
+        lock (_lock)
+        {
+            var list = LoadAll();
+            if (!list.Any(p => p.UserKey != newKey)) return;
+            foreach (var p in list) p.UserKey = newKey;
+            Save(list);
+        }
+    }
+
     private void Save(List<PendingUpload> list) =>
         File.WriteAllText(_path, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
 }

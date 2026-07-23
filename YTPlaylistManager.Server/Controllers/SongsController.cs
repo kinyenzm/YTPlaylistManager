@@ -25,6 +25,7 @@ public class SongsController : ControllerBase
     /// Soporta búsqueda por videoId (exacto + parcial) y por nombre (fuzzy + normalizado).
     /// </summary>
     [HttpPost("search")]
+    [RequireGoogleSession]
     public ActionResult<List<SongSearchResultDto>> Search([FromBody] SongSearchQueryDto query)
     {
         try

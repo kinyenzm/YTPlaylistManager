@@ -62,6 +62,31 @@ public class QuotaTracker
         }
     }
 
+    /// <summary>
+    /// YouTube respondió quotaExceeded: el contador local es solo una estimación y
+    /// otras apps del mismo proyecto pudieron gastar cuota, así que se fija Used al
+    /// límite para que el restante mostrado quede en cero hasta el reinicio diario.
+    /// </summary>
+    public void MarkExhausted()
+    {
+        lock (_lock)
+        {
+            var s = Load();
+            if (s.Used >= _limit) return;
+            s.Used = _limit;
+            Save(s);
+        }
+    }
+
+    /// <summary>True si la excepción de Google es por cuota/límite de tasa (403).</summary>
+    public static bool IsQuotaError(Google.GoogleApiException ex)
+    {
+        if (ex.HttpStatusCode != System.Net.HttpStatusCode.Forbidden) return false;
+        var reason = ex.Error?.Errors?.FirstOrDefault()?.Reason;
+        return reason is "quotaExceeded" or "rateLimitExceeded" or "dailyLimitExceeded"
+            || (ex.Message?.Contains("quota", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
     private QuotaState Load()
     {
         var today = Today();
