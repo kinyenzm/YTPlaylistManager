@@ -2,6 +2,7 @@ import {
   Component,
   ChangeDetectionStrategy,
   DestroyRef,
+  HostListener,
   signal,
   computed,
   effect,
@@ -10,11 +11,12 @@ import {
   untracked,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Title } from '@angular/platform-browser';
-import { debounceTime, Subject } from 'rxjs';
+import { debounceTime, delay, firstValueFrom, Subject } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import {
   ClassifyResult,
@@ -32,6 +34,14 @@ interface SongRow {
   title: string;
 }
 
+// Borrador local de una canción: baseline = listas donde está según caché al momento
+// de editar; desired = listas donde debe quedar. Nada toca la API hasta "Guardar todo".
+interface SongDraft {
+  title: string;
+  baseline: string[];
+  desired: string[];
+}
+
 @Component({
   selector: 'app-cross-duplicates',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -43,10 +53,15 @@ export class CrossDuplicates {
   private readonly translate = inject(TranslateService);
   private readonly titleSvc = inject(Title);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
+  protected readonly connected = this.auth.connected;
 
   // Ruta /organizar/lista/:id → abre directo en modo "por lista" (absorbe el
   // viejo detalle de playlist). Sin :id la página arranca en "repetidas".
   readonly id = input<string>();
+  // Query param ?q=<videoId> → modo "por canción" pre-buscado (desde command palette, funciona estando ya en la ruta).
+  readonly q = input<string>();
 
   protected readonly mode = signal<Mode>('repeated');
   protected readonly loading = signal(false);
@@ -72,6 +87,14 @@ export class CrossDuplicates {
   protected readonly resultsSorted = computed(() =>
     [...this.results()].sort((a, b) => (b.appearsInCount ?? 0) - (a.appearsInCount ?? 0)),
   );
+  protected readonly resultsDeduped = computed(() => {
+    const seen = new Set<string>();
+    return this.resultsSorted().filter(r => {
+      if (seen.has(r.videoId)) return false;
+      seen.add(r.videoId);
+      return true;
+    });
+  });
   protected readonly groupsSorted = computed(() => {
     const r = this.report();
     return r ? [...r.groups].sort((a, b) => b.playlistCount - a.playlistCount) : [];
@@ -144,14 +167,18 @@ export class CrossDuplicates {
   protected readonly searching = signal(false);
   private readonly searchSubject = new Subject<void>();
 
-  // Eliminaciones preparadas por tarjeta: videoId → ids de listas marcadas para quitar.
-  protected readonly stagedRemovals = signal<Record<string, ReadonlySet<string>>>({});
+  // Borradores acumulados por canción (videoId → SongDraft). Se guardan todos juntos
+  // con la barra global; ninguna edición dispara API hasta entonces.
+  protected readonly drafts = signal<Record<string, SongDraft>>({});
+  protected readonly draftCount = computed(() => Object.keys(this.drafts()).length);
+  protected readonly savingAll = signal(false);
 
   // Editor de asignación (compartido, modal) — solo multi-selección.
   protected readonly editingVideoId = signal<string | null>(null);
   protected readonly editingTitle = signal<string>('');
   protected readonly selection = signal<ReadonlySet<string>>(new Set());
-  protected readonly applying = signal(false);
+  // Estado original del servidor para el apply del modal (baseline del draft).
+  private readonly editorBaseline = signal<string[]>([]);
   protected readonly editorLoading = signal(false);
   // Listas ordenadas para el modal: primero donde ya está, luego el resto (alfabético).
   protected readonly editorPlaylists = signal<Playlist[]>([]);
@@ -159,9 +186,19 @@ export class CrossDuplicates {
   private readonly pendingSvc = inject(PendingService);
 
   constructor() {
-    this.loadPlaylists();
-    this.loadDupCounts();
-    this.pendingSvc.refresh();
+    // Cargas iniciales solo con sesión; al desconectar (401/logout) se limpia todo
+    // — regla: sin sesión no se muestra ni caché.
+    effect(() => {
+      if (this.connected()) {
+        untracked(() => {
+          this.loadPlaylists();
+          this.loadDupCounts();
+          this.pendingSvc.refresh();
+        });
+      } else {
+        untracked(() => this.clearAllData());
+      }
+    });
 
     this.searchSubject
       .pipe(debounceTime(400))
@@ -186,18 +223,26 @@ export class CrossDuplicates {
       });
     });
 
-    // Deep-link desde el command palette → modo "por canción" pre-buscado (vía router state, sin query params).
-    const navQ = (history.state as { q?: string })?.q;
-    if (navQ) {
-      const looksLikeId = /^[A-Za-z0-9_-]{8,}$/.test(navQ) && !navQ.includes(' ');
-      if (looksLikeId) {
-        this.idInput.set(navQ);
-      } else {
-        this.nameInput.set(navQ);
-      }
-      this.mode.set('bySong');
-      setTimeout(() => this.search(), 0);
-    }
+    // Deep-link desde el command palette → modo "por canción" pre-buscado (?q=videoId).
+    // Funciona incluso cuando ya se está en /organizar porque el query param cambia la URL.
+    effect(() => {
+      const navQ = this.q();
+      if (!navQ) return;
+      untracked(() => {
+        const looksLikeId = /^[A-Za-z0-9_-]{8,}$/.test(navQ) && !navQ.includes(' ');
+        if (looksLikeId) {
+          this.idInput.set(navQ);
+        } else {
+          this.nameInput.set(navQ);
+        }
+        this.mode.set('bySong');
+        setTimeout(() => {
+          this.search();
+          // Limpia el param para que el botón Atrás no lo reactive.
+          this.router.navigate([], { queryParams: { q: null }, queryParamsHandling: 'merge', replaceUrl: true });
+        }, 0);
+      });
+    });
 
     // Título del documento: "{lista} — {app}" cuando hay lista elegida.
     effect(() => {
@@ -266,13 +311,11 @@ export class CrossDuplicates {
     this.stagedMsg.set(null);
     this.aiError.set(null);
     this.closeEditor();
-    if (!id) {
-      this.listItems.set([]);
-      return;
-    }
+    this.listItems.set([]);
+    if (!id) return;
     this.loadingItems.set(true);
     this.error.set(null);
-    this.api.listItems(id, true).subscribe({   // solo caché: nunca lee de YouTube
+    this.api.listItems(id, true).pipe(delay(0)).subscribe({   // delay(0) rompe la cadena síncrona del caché para que Angular pinte el skeleton
       next: (items) => {
         this.listItems.set(items);
         this.loadingItems.set(false);
@@ -303,7 +346,15 @@ export class CrossDuplicates {
         this.api.refreshQuota();
         this.pickList(this.listId());
       },
-      error: () => this.loadingDup.set(false),
+      error: (e) => {
+        this.loadingDup.set(false);
+        this.error.set(
+          e?.status === 403
+            ? this.translate.instant('common.youtube_quota_exhausted')
+            : this.translate.instant('cross.error_scan'),
+        );
+        console.error(e);
+      },
     });
   }
 
@@ -318,7 +369,15 @@ export class CrossDuplicates {
         this.pickList(this.listId());
         this.loadDuplicates();
       },
-      error: () => this.cleaning.set(false),
+      error: (e) => {
+        this.cleaning.set(false);
+        this.error.set(
+          e?.status === 403
+            ? this.translate.instant('common.youtube_quota_exhausted')
+            : this.translate.instant('cross.error_scan'),
+        );
+        console.error(e);
+      },
     });
   }
 
@@ -409,50 +468,112 @@ export class CrossDuplicates {
     });
   }
 
-  // ── Badges editables: quitar de una lista sin abrir el modal ──
-  removedSet(videoId: string): ReadonlySet<string> {
-    return this.stagedRemovals()[videoId] ?? new Set();
+  // ── Borrador local: helpers de estado por tarjeta ──
+  // Badge/deshacer solo cuando el draft difiere de lo que la tarjeta muestra HOY.
+  // Tras subir desde el panel global el baseline queda viejo; si desired ya coincide
+  // con los ids actuales no hay nada pendiente que marcar.
+  hasDraftChanges(videoId: string, currentIds: string[] | undefined): boolean {
+    const d = this.drafts()[videoId];
+    if (!d) return false;
+    const cur = currentIds ?? [];
+    return d.desired.length !== cur.length || !d.desired.every((id) => cur.includes(id));
   }
 
-  toggleRemoval(videoId: string, playlistId: string): void {
-    const all = { ...this.stagedRemovals() };
-    const cur = new Set(all[videoId] ?? []);
-    if (cur.has(playlistId)) cur.delete(playlistId);
-    else cur.add(playlistId);
-    if (cur.size === 0) delete all[videoId];
-    else all[videoId] = cur;
-    this.stagedRemovals.set(all);
+  // Un tag renderizado desde ids actuales está "marcado para quitar" si hay draft
+  // y ya no figura en desired.
+  isStagedRemoved(videoId: string, playlistId: string): boolean {
+    const d = this.drafts()[videoId];
+    return !!d && !d.desired.includes(playlistId);
+  }
+
+  // Listas agregadas por el modal que aún no existen en el servidor (desired − baseline).
+  stagedAdditionRefs(videoId: string): { id: string; title: string }[] {
+    const d = this.drafts()[videoId];
+    if (!d) return [];
+    return this.refsFor(d.desired.filter((id) => !d.baseline.includes(id)));
+  }
+
+  // Crea/actualiza el draft; si desired vuelve a igualar baseline, lo elimina.
+  private upsertDraft(videoId: string, title: string, baseline: string[], desired: string[]): void {
+    const all = { ...this.drafts() };
+    const same = baseline.length === desired.length && baseline.every((id) => desired.includes(id));
+    if (same) delete all[videoId];
+    else all[videoId] = { title, baseline, desired };
+    this.drafts.set(all);
+  }
+
+  toggleRemoval(videoId: string, title: string, currentIds: string[], playlistId: string): void {
+    const existing = this.drafts()[videoId];
+    const baseline = existing?.baseline ?? [...currentIds];
+    const desired = new Set(existing?.desired ?? baseline);
+    if (desired.has(playlistId)) desired.delete(playlistId);
+    else desired.add(playlistId);
+    this.upsertDraft(videoId, title, baseline, [...desired]);
   }
 
   discardCard(videoId: string): void {
-    const all = { ...this.stagedRemovals() };
+    const all = { ...this.drafts() };
     delete all[videoId];
-    this.stagedRemovals.set(all);
+    this.drafts.set(all);
   }
 
-  // Guardar sin modal: desired = listas actuales − marcadas. Entra al flujo staged
-  // existente (assignSong → panel global de pendientes).
-  saveCard(videoId: string, title: string, currentIds: string[]): void {
-    const removed = this.removedSet(videoId);
-    const desired = currentIds.filter((id) => !removed.has(id));
-    this.applying.set(true);
+  // ── Guardar todo: única acción que manda los drafts a la cola de pendientes ──
+  async saveAll(): Promise<void> {
+    if (this.draftCount() === 0 || this.savingAll()) return;
+    if (!confirm(this.translate.instant('cross.draft_save_confirm', { n: this.draftCount() }))) return;
+    const ok = await this.saveAllCore();
+    if (ok) this.pendingSvc.open.set(true);
+  }
+
+  // Cuerpo sin confirm ni apertura de panel: lo reutiliza el guard de salida.
+  // Va quitando del record cada draft ya enviado para que un fallo a mitad no
+  // duplique al reintentar.
+  async saveAllCore(): Promise<boolean> {
+    const entries = Object.entries(this.drafts());
+    if (!entries.length) return true;
+    this.savingAll.set(true);
     this.error.set(null);
-    this.api
-      .assignSong({ videoId, title, channelTitle: null, thumbnailUrl: null, desiredPlaylistIds: desired })
-      .subscribe({
-        next: () => {
-          this.applying.set(false);
-          this.discardCard(videoId);
-          this.pendingSvc.refresh();
-          this.refreshCurrentMode();
-          this.loadDupCounts();
-        },
-        error: (e) => {
-          this.error.set(this.translate.instant('cross.assign_error'));
-          this.applying.set(false);
-          console.error(e);
-        },
-      });
+    let allOk = true;
+    try {
+      for (const [videoId, d] of entries) {
+        await firstValueFrom(this.api.assignSong({
+          videoId,
+          title: d.title,
+          channelTitle: null,
+          thumbnailUrl: null,
+          desiredPlaylistIds: d.desired,
+        }));
+        this.discardCard(videoId);
+      }
+    } catch (e) {
+      this.error.set(this.translate.instant('cross.assign_error'));
+      console.error(e);
+      allOk = false;
+    } finally {
+      this.savingAll.set(false);
+      this.pendingSvc.refresh();
+      this.refreshCurrentMode();
+      this.loadDupCounts();
+    }
+    return allOk;
+  }
+
+  discardAllDrafts(): void {
+    if (!confirm(this.translate.instant('cross.draft_discard_confirm', { n: this.draftCount() }))) return;
+    this.drafts.set({});
+  }
+
+  // Guard de salida: con drafts pendientes pregunta una vez; OK = guarda y sale.
+  async canLeave(): Promise<boolean> {
+    if (this.draftCount() === 0) return true;
+    const save = confirm(this.translate.instant('cross.draft_leave_confirm', { n: this.draftCount() }));
+    if (!save) return false;
+    return await this.saveAllCore();
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  onBeforeUnload(e: BeforeUnloadEvent): void {
+    if (this.draftCount() > 0) e.preventDefault();
   }
 
   // ── Editor de asignación (modal, solo para AGREGAR a listas nuevas) ──
@@ -462,7 +583,11 @@ export class CrossDuplicates {
     this.editorLoading.set(true);
     this.api.songLocations(row.videoId).subscribe({
       next: (locs) => {
-        const sel = new Set(locs);
+        // Con draft previo la selección arranca del draft (no del servidor) y el
+        // baseline original se conserva para no perder las adiciones acumuladas.
+        const existing = this.drafts()[row.videoId];
+        this.editorBaseline.set(existing?.baseline ?? locs);
+        const sel = new Set(existing?.desired ?? locs);
         this.selection.set(sel);
         // Primero las listas donde ya está; el resto alfabético (orden del backend).
         this.editorPlaylists.set(
@@ -473,6 +598,7 @@ export class CrossDuplicates {
         this.editorLoading.set(false);
       },
       error: (e) => {
+        this.editorBaseline.set([]);
         this.selection.set(new Set());
         this.editorPlaylists.set([...this.allPlaylists()]);
         this.editorLoading.set(false);
@@ -496,33 +622,12 @@ export class CrossDuplicates {
     this.selection.set(n);
   }
 
+  // Aplicar del modal = solo actualiza el borrador local y cierra; sin API.
   apply(): void {
     const vid = this.editingVideoId();
     if (!vid) return;
-    this.applying.set(true);
-    this.error.set(null);
-    this.api
-      .assignSong({
-        videoId: vid,
-        title: this.editingTitle(),
-        channelTitle: null,
-        thumbnailUrl: null,
-        desiredPlaylistIds: [...this.selection()],
-      })
-      .subscribe({
-        next: () => {
-          this.applying.set(false);
-          this.closeEditor();
-          this.pendingSvc.refresh();
-          this.refreshCurrentMode();
-          this.loadDupCounts();
-        },
-        error: (e) => {
-          this.error.set(this.translate.instant('cross.assign_error'));
-          this.applying.set(false);
-          console.error(e);
-        },
-      });
+    this.upsertDraft(vid, this.editingTitle(), this.editorBaseline(), [...this.selection()]);
+    this.closeEditor();
   }
 
   private refreshCurrentMode(): void {
@@ -530,6 +635,24 @@ export class CrossDuplicates {
     if (m === 'repeated' && this.report()) this.scan(false);
     else if (m === 'byList' && this.listId()) this.pickList(this.listId());
     else if (m === 'bySong' && this.results().length) this.search();
+  }
+
+  // Al perder la sesión: sin datos en pantalla (ni de caché) y sin borradores.
+  private clearAllData(): void {
+    this.report.set(null);
+    this.allPlaylists.set([]);
+    this.dupCounts.set({});
+    this.listId.set('');
+    this.listItems.set([]);
+    this.locMap.set({});
+    this.duplicates.set(null);
+    this.classification.set(null);
+    this.results.set([]);
+    this.nameInput.set('');
+    this.idInput.set('');
+    this.drafts.set({});
+    this.closeEditor();
+    this.error.set(null);
   }
 
 }

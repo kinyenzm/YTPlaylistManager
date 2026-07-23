@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { unsavedDraftsGuard } from './guards/unsaved-drafts.guard';
 
 // Cada pantalla se registra en español y en inglés (ambas URLs resuelven al mismo
 // componente). El menú usa la ruta del idioma activo (ver app.ts -> navPaths()).
@@ -16,10 +17,10 @@ export const routes: Routes = [
 
   // Organizar canciones (repetidas / por lista / por canción). La vista "por lista"
   // con :id absorbe el viejo detalle de playlist.
-  { path: 'organizar', loadComponent: crossDuplicates },
-  { path: 'organize', loadComponent: crossDuplicates },
-  { path: 'organizar/lista/:id', loadComponent: crossDuplicates },
-  { path: 'organize/list/:id', loadComponent: crossDuplicates },
+  { path: 'organizar', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
+  { path: 'organize', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
+  { path: 'organizar/lista/:id', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
+  { path: 'organize/list/:id', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
   // alias viejos
   { path: 'repetidas', redirectTo: 'organizar', pathMatch: 'full' },
   { path: 'duplicates', redirectTo: 'organize', pathMatch: 'full' },
