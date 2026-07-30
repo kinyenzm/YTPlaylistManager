@@ -4,9 +4,9 @@ import { PendingService } from './pending.service';
 import { AuthStatus } from '../models/models';
 
 /**
- * Estado de sesión Google único para toda la app (antes duplicado en App y
- * PlaylistsPage). Los componentes leen `connected` y NO piden datos sin sesión;
- * el interceptor HTTP llama markDisconnected(true) ante un 401 de la API.
+ * Estado de sesión Google único para toda la app. Los componentes leen `connected`
+ * y NO piden datos sin sesión; el interceptor HTTP llama markDisconnected(true)
+ * ante un 401 de la API.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {

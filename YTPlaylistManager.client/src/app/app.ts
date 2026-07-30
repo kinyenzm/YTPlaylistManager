@@ -7,7 +7,7 @@ import {
   inject,
   OnInit,
 } from '@angular/core';
-import { RouterOutlet, RouterLink } from '@angular/router';
+import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
 import { AuthService } from './services/auth.service';
@@ -18,6 +18,16 @@ import { CommandPalette } from './components/command-palette/command-palette';
 const STORAGE_KEY = 'ytpm.lang';
 const SUPPORTED = ['es', 'en'] as const;
 type Lang = (typeof SUPPORTED)[number];
+
+function mapUrlToLang(url: string, es: boolean): string {
+  const rules: [RegExp, string][] = es
+    ? [[/^\/organize\/list\//, '/organizar/lista/'], [/^\/organize/, '/organizar'], [/^\/data/, '/datos']]
+    : [[/^\/organizar\/lista\//, '/organize/list/'], [/^\/organizar/, '/organize'], [/^\/datos/, '/data']];
+  for (const [re, replacement] of rules) {
+    if (re.test(url)) return url.replace(re, replacement);
+  }
+  return url;
+}
 
 function detectInitialLang(): Lang {
   if (typeof localStorage !== 'undefined') {
@@ -41,6 +51,7 @@ function detectInitialLang(): Lang {
 export class App implements OnInit {
   private readonly api = inject(ApiService);
   private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
 
   protected readonly loginUrl = this.api.loginUrl();
@@ -56,8 +67,6 @@ export class App implements OnInit {
     };
   });
 
-  // Poll de cuota solo con sesión activa: sin login no hay nada que medir y cada
-  // tick sería un request de fondo inútil.
   private quotaTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
@@ -84,6 +93,9 @@ export class App implements OnInit {
       if (typeof document !== 'undefined') {
         document.documentElement.lang = e.lang;
       }
+      
+      const mapped = mapUrlToLang(this.router.url, e.lang.startsWith('es'));
+      if (mapped !== this.router.url) this.router.navigateByUrl(mapped);
     });
 
     this.auth.check();

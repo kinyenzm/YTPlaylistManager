@@ -15,21 +15,11 @@ export const routes: Routes = [
       import('./pages/playlists/playlists-page').then((m) => m.PlaylistsPage),
   },
 
-  // Organizar canciones (repetidas / por lista / por canción). La vista "por lista"
-  // con :id absorbe el viejo detalle de playlist.
+  // Organizar canciones (repetidas / por lista / por canción / recuperar).
   { path: 'organizar', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
   { path: 'organize', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
   { path: 'organizar/lista/:id', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
   { path: 'organize/list/:id', loadComponent: crossDuplicates, canDeactivate: [unsavedDraftsGuard] },
-  // alias viejos
-  { path: 'repetidas', redirectTo: 'organizar', pathMatch: 'full' },
-  { path: 'duplicates', redirectTo: 'organize', pathMatch: 'full' },
-  { path: 'listas/:id', redirectTo: 'organizar/lista/:id' },
-  { path: 'playlists/:id', redirectTo: 'organizar/lista/:id' },
-
-  // Buscar canción → fusionado en el organizador (modo "por canción")
-  { path: 'buscar', redirectTo: 'organizar', pathMatch: 'full' },
-  { path: 'search', redirectTo: 'organize', pathMatch: 'full' },
 
   // Datos guardados / data (cache)
   { path: 'datos', loadComponent: cacheExplorer },

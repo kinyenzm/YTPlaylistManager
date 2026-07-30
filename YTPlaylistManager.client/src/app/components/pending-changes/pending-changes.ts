@@ -7,11 +7,9 @@ import { PendingService } from '../../services/pending.service';
 import { PendingSongMove, PendingUpload } from '../../models/models';
 
 /**
- * Panel global de cambios pendientes (estilo "Actividad en YouTube"): chip
- * flotante + modal superpuesto disponible en todas las pestañas. Centraliza
- * subir/descartar (individual y en bloque) de uniones y cambios de canciones,
- * con su costo en unidades. Reemplaza los paneles que vivían en Mis listas,
- * Organizar y el detalle de playlist.
+ * Panel global de cambios pendientes: chip flotante + modal superpuesto
+ * disponible en todas las pestañas. Centraliza subir/descartar (individual y en
+ * bloque) de uniones y cambios de canciones, con su costo en unidades.
  */
 @Component({
   selector: 'app-pending-changes',

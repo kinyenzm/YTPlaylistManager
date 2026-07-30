@@ -26,8 +26,6 @@ export class PlaylistsPage implements OnInit {
   private readonly pending = inject(PendingService);
   private readonly auth = inject(AuthService);
 
-  // Estado de sesión compartido (AuthService); antes esta página hacía su propia
-  // llamada a /auth/status duplicando el estado del shell.
   protected readonly authChecked = this.auth.checked;
   protected readonly authenticated = this.auth.connected;
 
@@ -150,8 +148,7 @@ export class PlaylistsPage implements OnInit {
     this.selectedIds.set(next);
   }
 
-  // Selección por click en toda la card; archivadas/en cola no son seleccionables
-  // (mismas condiciones que tenía el checkbox deshabilitado).
+  // Selección por click en toda la card; archivadas/en cola no son seleccionables.
   toggleCard(p: Playlist): void {
     if (p.isArchived || p.queuedForMerge) return;
     this.toggle(p.id);
