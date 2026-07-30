@@ -148,7 +148,9 @@ export class PendingChanges implements OnDestroy {
     const parts: string[] = [];
     try {
       let paused = false;
-      for (const pu of this.svc.uploads()) {
+      // Los pendientes cuya lista destino ya no existe se saltan: subirlos falla y solo
+      // se pueden descartar (el aviso está en su tarjeta).
+      for (const pu of this.svc.uploads().filter((u) => !u.targetMissing)) {
         const total = pu.itemCount;
         let totalUploaded = 0;
         while (true) {

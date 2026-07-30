@@ -75,6 +75,24 @@ public class YouTubeService : IYouTubeService
     /// <summary>True si la excepción de Google es por cuota/límite de tasa (403).</summary>
     private static bool IsQuotaError(Google.GoogleApiException ex) => QuotaTracker.IsQuotaError(ex);
 
+    /// <summary>
+    /// Ids de playlists vigentes según la caché de la lista (0 cuota). Devuelve null si
+    /// la caché aún no existe: en ese caso NO se puede afirmar que una lista falte, así
+    /// que las validaciones deben dejar pasar en vez de bloquear por falta de datos.
+    /// </summary>
+    private HashSet<string>? KnownPlaylistIds()
+    {
+        var cache = _cacheStore.Load();
+        return cache is null ? null : cache.Playlists.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>True solo si sabemos con certeza que la playlist ya no existe.</summary>
+    private bool IsKnownMissing(string playlistId)
+    {
+        var known = KnownPlaylistIds();
+        return known is not null && !known.Contains(playlistId);
+    }
+
     // Playlists especiales de YouTube (FL=Favoritos, WL=Ver más tarde, LL=Me gusta, RD=Mezcla)
     // que la API no permite borrar. Si una lista origen tiene este prefijo, la omitimos en lugar
     // de dejar el pending bloqueado para siempre.
@@ -647,6 +665,13 @@ public class YouTubeService : IYouTubeService
         if (plan.UserKey != userKey)
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
 
+        // Validación previa (0 cuota): si la lista destino ya no existe, cortar acá —
+        // sin gastar unidades ni tocar la caché ni las listas origen.
+        if (IsKnownMissing(plan.TargetPlaylistId))
+            throw new ArgumentException(
+                $"La lista destino «{plan.TargetPlaylistTitle}» ya no existe en YouTube. " +
+                "Descartá este cambio pendiente: nada se subió y las listas origen quedaron intactas.");
+
         var yt = BuildClient();
         var targetId = plan.TargetPlaylistId;
         int uploaded = 0, failed = 0;
@@ -827,13 +852,15 @@ public class YouTubeService : IYouTubeService
     public List<PendingUploadDto> GetPendingUploads()
     {
         var userKey = CurrentUserKey();
+        var known = KnownPlaylistIds();
         return _pendingUploads.LoadForUser(userKey)
             .Select(p => new PendingUploadDto(
                 p.Id, p.TargetPlaylistId, p.TargetPlaylistTitle,
                 p.Items.Count, (p.Items.Count + p.Sources.Count) * 50, p.CreatedAtUtc,
                 p.Items.Select(i => new PendingUploadItemDto(
                     i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists)).ToList(),
-                p.Sources.Select(s => s.Title).ToList()))
+                p.Sources.Select(s => s.Title).ToList(),
+                known is not null && !known.Contains(p.TargetPlaylistId)))
             .ToList();
     }
 
@@ -874,12 +901,28 @@ public class YouTubeService : IYouTubeService
         return map;
     }
 
-    private static PendingSongMoveDto ToDto(PendingSongMove m) => new(
-        m.Id, m.VideoId, m.Title, m.ThumbnailUrl,
-        m.AddTo.Select(a => a.PlaylistTitle).ToList(),
-        m.RemoveFrom.Select(r => r.PlaylistTitle).ToList(),
-        (m.AddTo.Count + m.RemoveFrom.Count) * 50,
-        m.CreatedAtUtc);
+    private PendingSongMoveDto ToDto(PendingSongMove m)
+    {
+        // Listas involucradas que ya no existen: se informan para que el panel lo avise;
+        // al subir se omiten en vez de contarse como fallo.
+        var known = KnownPlaylistIds();
+        var missing = known is null
+            ? []
+            : m.AddTo.Select(a => (a.PlaylistId, a.PlaylistTitle))
+                .Concat(m.RemoveFrom.Select(r => (r.PlaylistId, r.PlaylistTitle)))
+                .Where(x => !known.Contains(x.Item1))
+                .Select(x => x.Item2)
+                .Distinct()
+                .ToList();
+
+        return new PendingSongMoveDto(
+            m.Id, m.VideoId, m.Title, m.ThumbnailUrl,
+            m.AddTo.Select(a => a.PlaylistTitle).ToList(),
+            m.RemoveFrom.Select(r => r.PlaylistTitle).ToList(),
+            (m.AddTo.Count + m.RemoveFrom.Count) * 50,
+            m.CreatedAtUtc,
+            missing);
+    }
 
     /// <summary>Aplica en local la reasignación (agregar/quitar) y la deja pendiente de subir.</summary>
     public PendingSongMoveDto? StageSongAssignment(AssignSongRequest req)
@@ -962,10 +1005,18 @@ public class YouTubeService : IYouTubeService
         var addRem = new List<SongMoveTarget>();
         var remRem = new List<SongMoveRemoval>();
         var realIdByLocal = new Dictionary<string, string>(StringComparer.Ordinal);
+        var known = KnownPlaylistIds();
 
         foreach (var t in move.AddTo)
         {
             if (paused) { addRem.Add(t); continue; }
+            // Lista destino borrada: se omite en silencio (no es un fallo del usuario) y
+            // se saca de la operación para que el pendiente pueda completarse.
+            if (known is not null && !known.Contains(t.PlaylistId))
+            {
+                _logger.LogWarning("Lista {Pl} ya no existe; se omite el alta de {Video}.", t.PlaylistId, move.VideoId);
+                continue;
+            }
             try
             {
                 var inserted = await yt.PlaylistItems.Insert(new PlaylistItem
@@ -983,6 +1034,8 @@ public class YouTubeService : IYouTubeService
         foreach (var r in move.RemoveFrom)
         {
             if (paused) { remRem.Add(r); continue; }
+            // Si la lista entera ya no existe, la canción tampoco está en ella: hecho.
+            if (known is not null && !known.Contains(r.PlaylistId)) { removed++; continue; }
             try
             {
                 await yt.PlaylistItems.Delete(r.PlaylistItemId).ExecuteAsync(ct);
@@ -1111,7 +1164,7 @@ public class YouTubeService : IYouTubeService
             plan.Items.Count, plan.Items.Count * 50, plan.CreatedAtUtc,
             plan.Items.Select(i => new PendingUploadItemDto(
                 i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists)).ToList(),
-            []);
+            [], false);
     }
 
     /// <summary>

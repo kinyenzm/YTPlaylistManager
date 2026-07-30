@@ -133,7 +133,8 @@ public record PendingUploadDto(
     int EstimatedQuotaUnits,
     DateTime CreatedAtUtc,
     List<PendingUploadItemDto> Items,
-    List<string> SourceTitles    // listas origen que se borrarán de YouTube al subir
+    List<string> SourceTitles,   // listas origen que se borrarán de YouTube al subir
+    bool TargetMissing           // la lista destino ya no existe: solo se puede descartar
 );
 
 public record UploadResultDto(
@@ -166,7 +167,8 @@ public record PendingSongMoveDto(
     List<string> AddTo,           // títulos de listas donde se va a agregar
     List<string> RemoveFrom,      // títulos de listas de donde se va a quitar
     int EstimatedQuotaUnits,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    List<string> MissingTargets   // listas involucradas que ya no existen (se omiten al subir)
 );
 
 public record SongMoveUploadResultDto(

@@ -229,6 +229,8 @@
     "upload_all": "Upload all (~{{q}}u)",
     "discard_all": "Discard all",
     "upload_all_confirm": "You're about to upload {{n}} change(s) to YouTube (~{{q}} units). If there are merges, their source playlists get DELETED from YouTube afterwards. This is permanent. Continue?",
+    "target_missing": "Target playlist «{{title}}» no longer exists on YouTube. Nothing was uploaded and source playlists are intact: discard this change.",
+    "moves_missing": "These playlists no longer exist and will be skipped: {{lists}}",
     "discard_all_confirm": "Discard ALL pending changes ({{n}})? They're undone locally; YouTube isn't touched.",
     "merges": "Playlist merges ({{n}})",
     "moves": "Song changes ({{n}})"

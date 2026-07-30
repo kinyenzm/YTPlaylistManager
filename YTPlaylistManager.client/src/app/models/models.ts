@@ -83,6 +83,7 @@ export interface PendingUpload {
   createdAtUtc: string;
   items: MergePreviewSong[];
   sourceTitles: string[];
+  targetMissing: boolean;
 }
 
 export interface UploadResult {
@@ -144,6 +145,7 @@ export interface PendingSongMove {
   removeFrom: string[];
   estimatedQuotaUnits: number;
   createdAtUtc: string;
+  missingTargets: string[];
 }
 
 export interface SongMoveUploadResult {
