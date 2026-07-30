@@ -198,6 +198,16 @@ export interface SongSearchResult {
   mergeId?: string | null;
 }
 
+// Canción conocida por la app pero ausente de todas las playlists actuales.
+export interface RecoverableSong {
+  videoId: string;
+  title: string;
+  channelTitle?: string | null;
+  thumbnailUrl?: string | null;
+  lastKnownPlaylist: string;
+  lastSeenUtc?: string | null;
+}
+
 // ── Auditoría y trazabilidad ──
 
 export interface SongMovementEvent {

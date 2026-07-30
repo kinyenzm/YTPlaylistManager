@@ -17,6 +17,8 @@
       }}</button>
     <button [class.active]="mode() === 'bySong'" (click)="setMode('bySong')">{{ 'cross.mode_bysong' | translate
       }}</button>
+    <button [class.active]="mode() === 'recover'" (click)="setMode('recover')">{{ 'cross.mode_recover' | translate
+      }}</button>
   </div>
 </div>
 
@@ -42,7 +44,7 @@
 <div class="card">{{ 'cross.empty' | translate }}</div>
 }
 @for (g of groupsSorted(); track g.videoId) {
-<div class="card">
+<div class="card" [class.card--draft]="hasDraftChanges(g.videoId, playlistIdsOf(g))">
   <div class="row cross-org__song-row">
     <img [src]="thumb(g.videoId)" class="thumb" alt="" />
     <div class="cross-org__song-body">
@@ -66,7 +68,6 @@
       </div>
       @if (hasDraftChanges(g.videoId, playlistIdsOf(g))) {
       <div class="row row--actions">
-        <span class="cross-org__draft-badge">{{ 'cross.draft_badge' | translate }}</span>
         <button type="button" class="link-btn" (click)="discardCard(g.videoId)">{{ 'cross.draft_undo' | translate }}</button>
       </div>
       }
@@ -194,7 +195,7 @@
 } @else if (listId() && listItems().length > 0) {
 <div class="cross-org__song-list">
   @for (it of listItemsSorted(); track it.playlistItemId) {
-  <div class="card">
+  <div class="card" [class.card--draft]="hasDraftChanges(it.videoId, locMap()[it.videoId])">
     <div class="row cross-org__song-row">
       <img [src]="it.thumbnailUrl || thumb(it.videoId)" class="thumb" alt="" />
       <div class="cross-org__song-body">
@@ -236,7 +237,6 @@
         }
         @if (hasDraftChanges(it.videoId, locMap()[it.videoId])) {
         <div class="row row--actions">
-          <span class="cross-org__draft-badge">{{ 'cross.draft_badge' | translate }}</span>
           <button type="button" class="link-btn" (click)="$event.stopPropagation(); discardCard(it.videoId)">
             {{ 'cross.draft_undo' | translate }}</button>
         </div>
@@ -290,7 +290,8 @@
 @if (resultsDeduped().length > 0) {
 <p class="muted cross-org__summary">{{ 'cross.results_count' | translate:{ n: resultsDeduped().length } }}</p>
 @for (r of resultsDeduped(); track r.videoId) {
-<div class="card card--selectable" (click)="openEditor({ videoId: r.videoId, title: r.title })">
+<div class="card card--selectable" [class.card--draft]="hasDraftChanges(r.videoId, r.appearsInPlaylistIds)"
+  (click)="openEditor({ videoId: r.videoId, title: r.title })">
   <div class="row cross-org__song-row">
     <img [src]="thumb(r.videoId)" class="thumb" alt="" />
     <div class="cross-org__song-body">
@@ -323,7 +324,6 @@
       </div>
       @if (hasDraftChanges(r.videoId, r.appearsInPlaylistIds)) {
       <div class="row row--actions">
-        <span class="cross-org__draft-badge">{{ 'cross.draft_badge' | translate }}</span>
         <button type="button" class="link-btn" (click)="$event.stopPropagation(); discardCard(r.videoId)">
           {{ 'cross.draft_undo' | translate }}</button>
       </div>
@@ -336,6 +336,100 @@
 <div class="card cross-org__empty-card">{{ 'cross.no_results' | translate }}</div>
 } @else if (!searching()) {
 <p class="muted cross-org__summary">{{ 'cross.search_intro' | translate }}</p>
+}
+}
+
+<!-- ── Modo: Recuperar (huérfanas: conocidas pero fuera de toda playlist actual) ── -->
+@if (mode() === 'recover') {
+<p class="muted cross-org__summary">{{ 'cross.recover_intro' | translate }}</p>
+<div class="row toolbar cross-org__actions-row">
+  <button class="secondary" (click)="loadRecoverable()" [disabled]="loadingRecover()">
+    {{ 'cross.recover_reload' | translate }}
+  </button>
+  @if (recoverable().length > 0) {
+  <select [ngModel]="recoverListFilter()" (ngModelChange)="recoverListFilter.set($event)">
+    <option value="">{{ 'cross.recover_filter_all' | translate:{ n: recoverable().length } }}</option>
+    @for (l of recoverLists(); track l.name) {
+    <option [value]="l.name">{{ l.name }} ({{ l.n }})</option>
+    }
+  </select>
+  <button class="secondary" (click)="toggleSelectAllRecover()">
+    {{ (allRecoverSelected() ? 'cross.recover_unselect_all' : 'cross.recover_select_all') | translate }}
+  </button>
+  <select [ngModel]="recoverTargetId()" (ngModelChange)="recoverTargetId.set($event)">
+    <option value="">{{ 'cross.recover_new_list_opt' | translate }}</option>
+    @for (pl of allPlaylists(); track pl.id) {
+    <option [value]="pl.id">{{ pl.title }}</option>
+    }
+  </select>
+  @if (!recoverTargetId()) {
+  <input type="text" [ngModel]="recoverNewTitle()" (ngModelChange)="recoverNewTitle.set($event)"
+    [placeholder]="'cross.recover_new_list_ph' | translate" style="flex:1;min-width:160px" />
+  }
+  <button (click)="stageRecovery()" [disabled]="recoverSel().size === 0 || stagingRecover()">
+    {{ (stagingRecover() ? 'cross.recover_staging' : 'cross.recover_stage_btn') | translate:{ n: recoverSel().size } }}
+  </button>
+  }
+</div>
+
+@if (loadingRecover()) {
+<div class="cross-org__song-list">
+  @for (_ of [1,2,3,4,5]; track $index) {
+  <div class="card--skeleton">
+    <div class="row">
+      <span class="skeleton skeleton--thumb"></span>
+      <div class="flex-fill">
+        <span class="skeleton skeleton--title"></span>
+        <span class="skeleton skeleton--text" style="width:50%"></span>
+      </div>
+    </div>
+  </div>
+  }
+</div>
+} @else if (recoverable().length > 0) {
+<p class="muted cross-org__summary">
+  {{ 'cross.recover_count' | translate:{ n: recoverableFiltered().length } }}
+  @if (recoverSel().size > 0) {
+  <span class="tag tag--staged-added">
+    {{ 'cross.recover_selected' | translate:{ n: recoverSel().size, total: recoverableFiltered().length } }}
+  </span>
+  }
+</p>
+@for (r of recoverableFiltered(); track r.videoId) {
+<div class="card card--selectable" [class.card--selected]="recoverSel().has(r.videoId)"
+  [class.card--draft]="hasDraftChanges(r.videoId, [])"
+  (click)="toggleRecoverSel(r.videoId)">
+  <div class="row cross-org__song-row">
+    <img [src]="r.thumbnailUrl || thumb(r.videoId)" class="thumb" alt="" />
+    <div class="cross-org__song-body">
+      <div>
+        <a [href]="'https://www.youtube.com/watch?v=' + r.videoId" target="_blank" rel="noopener"
+          (click)="$event.stopPropagation()">{{ r.title }}</a>
+      </div>
+      @if (r.channelTitle) {
+      <div class="muted cross-org__channel"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
+        r.channelTitle }}</div>
+      }
+      <div class="row row--tags">
+        <span class="muted"><i class="fa-solid fa-clock-rotate-left cross-org__meta-icon"></i>{{
+          'cross.recover_last_seen' | translate }}</span>
+        <span class="tag">{{ r.lastKnownPlaylist }}</span>
+      </div>
+      @for (ref of stagedAdditionRefs(r.videoId); track ref.id) {
+      <span class="tag tag--staged-added">+ {{ ref.title }}</span>
+      }
+      @if (hasDraftChanges(r.videoId, [])) {
+      <div class="row row--actions">
+        <button type="button" class="link-btn" (click)="$event.stopPropagation(); discardCard(r.videoId)">
+          {{ 'cross.draft_undo' | translate }}</button>
+      </div>
+      }
+    </div>
+  </div>
+</div>
+}
+} @else if (recoverLoaded()) {
+<div class="card cross-org__empty-card">{{ 'cross.recover_empty' | translate }}</div>
 }
 }
 

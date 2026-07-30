@@ -25,10 +25,11 @@ import {
   DuplicateReport,
   Playlist,
   PlaylistItem,
+  RecoverableSong,
   SongSearchResult,
 } from '../../models/models';
 
-type Mode = 'repeated' | 'byList' | 'bySong';
+type Mode = 'repeated' | 'byList' | 'bySong' | 'recover';
 interface SongRow {
   videoId: string;
   title: string;
@@ -57,8 +58,8 @@ export class CrossDuplicates {
   private readonly auth = inject(AuthService);
   protected readonly connected = this.auth.connected;
 
-  // Ruta /organizar/lista/:id → abre directo en modo "por lista" (absorbe el
-  // viejo detalle de playlist). Sin :id la página arranca en "repetidas".
+  // Ruta /organizar/lista/:id → abre directo en modo "por lista".
+  // Sin :id la página arranca en "repetidas".
   readonly id = input<string>();
   // Query param ?q=<videoId> → modo "por canción" pre-buscado (desde command palette, funciona estando ya en la ruta).
   readonly q = input<string>();
@@ -134,7 +135,7 @@ export class CrossDuplicates {
   // Canciones de esa lista repetidas en otras (badge rojo del selector)
   protected readonly dupCounts = signal<Record<string, number>>({});
 
-  // ── Herramientas de lista (portadas del viejo detalle de playlist) ──
+  // ── Herramientas de lista ──
   protected readonly duplicates = signal<DuplicateReport | null>(null);
   protected readonly classification = signal<ClassifyResult | null>(null);
   protected readonly loadingItems = signal(false);
@@ -159,7 +160,38 @@ export class CrossDuplicates {
     return [...d.groups].sort((a, b) => rank(a.matchType) - rank(b.matchType));
   });
 
-  // Modo "por canción" — filtrado en vivo (debounce, sin Enter), fusión de /buscar
+  // Modo "recuperar" — huérfanas: conocidas por la app pero fuera de toda playlist actual
+  protected readonly recoverable = signal<RecoverableSong[]>([]);
+  protected readonly loadingRecover = signal(false);
+  protected readonly recoverLoaded = signal(false);
+  // Selección múltiple + destino (lista existente o nueva) para encolar la recuperación.
+  protected readonly recoverSel = signal<ReadonlySet<string>>(new Set());
+  protected readonly recoverTargetId = signal<string>('');   // '' = crear lista nueva
+  protected readonly recoverNewTitle = signal<string>('');
+  protected readonly stagingRecover = signal(false);
+  // Filtro por lista de origen (lastKnownPlaylist): permite recuperar una lista borrada entera.
+  protected readonly recoverListFilter = signal<string>('');
+  protected readonly recoverLists = computed(() => {
+    const counts = new Map<string, number>();
+    for (const r of this.recoverable()) {
+      counts.set(r.lastKnownPlaylist, (counts.get(r.lastKnownPlaylist) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([name, n]) => ({ name, n }))
+      .sort((a, b) => b.n - a.n);
+  });
+  protected readonly recoverableFiltered = computed(() => {
+    const f = this.recoverListFilter();
+    return f ? this.recoverable().filter((r) => r.lastKnownPlaylist === f) : this.recoverable();
+  });
+  protected readonly allRecoverSelected = computed(() => {
+    const list = this.recoverableFiltered();
+    if (list.length === 0) return false;
+    const sel = this.recoverSel();
+    return list.every((r) => sel.has(r.videoId));
+  });
+
+  // Modo "por canción" — filtrado en vivo (debounce, sin Enter)
   protected readonly nameInput = signal<string>('');
   protected readonly idInput = signal<string>('');
   protected readonly searchScope = signal<'all' | 'active' | 'archived'>('all');
@@ -258,6 +290,82 @@ export class CrossDuplicates {
     this.mode.set(m);
     this.closeEditor();
     this.error.set(null);
+    if (m === 'recover' && !this.recoverLoaded()) this.loadRecoverable();
+  }
+
+  loadRecoverable(): void {
+    this.loadingRecover.set(true);
+    this.error.set(null);
+    this.recoverSel.set(new Set());
+    this.api.recoverableSongs().pipe(delay(0)).subscribe({   // delay(0): deja pintar el skeleton
+      next: (r) => {
+        this.recoverable.set(r);
+        this.recoverLoaded.set(true);
+        this.loadingRecover.set(false);
+      },
+      error: (e) => {
+        this.error.set(this.translate.instant('cross.error_scan'));
+        this.loadingRecover.set(false);
+        console.error(e);
+      },
+    });
+  }
+
+  toggleRecoverSel(videoId: string): void {
+    const n = new Set(this.recoverSel());
+    if (n.has(videoId)) n.delete(videoId);
+    else n.add(videoId);
+    this.recoverSel.set(n);
+  }
+
+  // Selecciona/deselecciona lo VISIBLE (respeta el filtro por lista de origen).
+  toggleSelectAllRecover(): void {
+    const visible = this.recoverableFiltered().map((r) => r.videoId);
+    const sel = new Set(this.recoverSel());
+    if (this.allRecoverSelected()) visible.forEach((id) => sel.delete(id));
+    else visible.forEach((id) => sel.add(id));
+    this.recoverSel.set(sel);
+  }
+
+  // Encola la recuperación: crea la lista (si aplica) y deja un pendiente de subida
+  // reanudable — la subida real (50u por canción) se hace desde el panel global.
+  stageRecovery(): void {
+    const sel = this.recoverSel();
+    if (sel.size === 0 || this.stagingRecover()) return;
+    const targetId = this.recoverTargetId();
+    const newTitle = this.recoverNewTitle().trim();
+    if (!targetId && !newTitle) {
+      this.error.set(this.translate.instant('cross.recover_need_target'));
+      return;
+    }
+    const n = sel.size;
+    if (!confirm(this.translate.instant('cross.recover_confirm', { n }))) return;
+    this.stagingRecover.set(true);
+    this.error.set(null);
+    const songs = this.recoverable()
+      .filter((r) => sel.has(r.videoId))
+      .map((r) => ({ videoId: r.videoId, title: r.title, channelTitle: r.channelTitle, thumbnailUrl: r.thumbnailUrl }));
+    this.api.recoverSongs({
+      targetPlaylistId: targetId || null,
+      newPlaylistTitle: targetId ? null : newTitle,
+      songs,
+    }).subscribe({
+      next: () => {
+        this.stagingRecover.set(false);
+        this.recoverSel.set(new Set());
+        this.recoverNewTitle.set('');
+        this.pendingSvc.refresh();   // queda en el chip de pendientes; el usuario sube cuando quiera
+      },
+      error: (e) => {
+        this.stagingRecover.set(false);
+        this.error.set(
+          e?.status === 403
+            ? this.translate.instant('common.youtube_quota_exhausted')
+            : this.translate.instant('cross.error_scan'),
+        );
+        console.error(e);
+      },
+    });
   }
 
   private loadPlaylists(): void {
@@ -335,7 +443,7 @@ export class CrossDuplicates {
     });
   }
 
-  // ── Herramientas de lista (portadas del detalle): repetidas internas + IA ──
+  // ── Herramientas de lista: repetidas internas + IA ──
   loadDuplicates(): void {
     if (!this.listId()) return;
     this.loadingDup.set(true);
@@ -437,7 +545,7 @@ export class CrossDuplicates {
     });
   }
 
-  // ── Modo por canción (fusión de /buscar): filtros en vivo ──
+  // ── Modo por canción: filtros en vivo ──
   onFilterChange(): void {
     this.searchSubject.next();
   }
@@ -469,9 +577,8 @@ export class CrossDuplicates {
   }
 
   // ── Borrador local: helpers de estado por tarjeta ──
-  // Badge/deshacer solo cuando el draft difiere de lo que la tarjeta muestra HOY.
-  // Tras subir desde el panel global el baseline queda viejo; si desired ya coincide
-  // con los ids actuales no hay nada pendiente que marcar.
+  // Marca solo cuando el draft difiere de lo que la tarjeta muestra HOY: tras subir
+  // desde el panel global el baseline queda obsoleto y no hay nada que señalar.
   hasDraftChanges(videoId: string, currentIds: string[] | undefined): boolean {
     const d = this.drafts()[videoId];
     if (!d) return false;
@@ -521,8 +628,8 @@ export class CrossDuplicates {
   async saveAll(): Promise<void> {
     if (this.draftCount() === 0 || this.savingAll()) return;
     if (!confirm(this.translate.instant('cross.draft_save_confirm', { n: this.draftCount() }))) return;
-    const ok = await this.saveAllCore();
-    if (ok) this.pendingSvc.open.set(true);
+    // Solo encola: la subida se dispara desde el chip de pendientes cuando el usuario quiera.
+    await this.saveAllCore();
   }
 
   // Cuerpo sin confirm ni apertura de panel: lo reutiliza el guard de salida.
@@ -635,6 +742,7 @@ export class CrossDuplicates {
     if (m === 'repeated' && this.report()) this.scan(false);
     else if (m === 'byList' && this.listId()) this.pickList(this.listId());
     else if (m === 'bySong' && this.results().length) this.search();
+    else if (m === 'recover' && this.recoverLoaded()) this.loadRecoverable();
   }
 
   // Al perder la sesión: sin datos en pantalla (ni de caché) y sin borradores.
@@ -650,6 +758,12 @@ export class CrossDuplicates {
     this.results.set([]);
     this.nameInput.set('');
     this.idInput.set('');
+    this.recoverable.set([]);
+    this.recoverLoaded.set(false);
+    this.recoverSel.set(new Set());
+    this.recoverListFilter.set('');
+    this.recoverTargetId.set('');
+    this.recoverNewTitle.set('');
     this.drafts.set({});
     this.closeEditor();
     this.error.set(null);

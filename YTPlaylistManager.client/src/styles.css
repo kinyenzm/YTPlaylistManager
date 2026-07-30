@@ -470,19 +470,26 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
 }
-.cross-org__draft-badge {
-  font-size: 0.76rem; color: var(--accent2);
-  border: 1px solid rgba(198, 242, 78, 0.35); border-radius: 999px;
-  padding: 1px 8px;
+/* Tarjeta con borrador pendiente: marca por color (la barra global ya da el conteo). */
+.card--draft {
+  border-color: rgba(198, 242, 78, 0.45);
+  box-shadow: 0 0 0 1px rgba(198, 242, 78, 0.18);
 }
 .link-btn {
-  background: none; border: none; padding: 0;
-  color: var(--muted); text-decoration: underline; cursor: pointer;
-  font-size: 0.82rem; font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 12px;
+  color: var(--muted);
+  font-size: 0.8rem; font-weight: 600;
+  cursor: pointer;
 }
 .link-btn:hover {
   color: var(--text);
-  background: none; transform: none; box-shadow: none;
+  background: var(--panel-2);
+  border-color: #3a404a;
+  transform: translateY(-1px);
+  box-shadow: none;
 }
 /* Toast fijo de sesión expirada (interceptor 401) */
 .session-toast {

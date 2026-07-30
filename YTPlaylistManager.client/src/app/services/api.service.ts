@@ -5,7 +5,7 @@ import {
   Playlist, PlaylistItem, DuplicateReport, MergeRequest, MergeResult, MergePreview,
   PendingUpload, UploadResult, PendingSongMove, SongMoveUploadResult, SongMoveBulkResult, Quota,
   ClassifyResult, AuthStatus, CrossDuplicateReport,
-  SongSearchQuery, SongSearchResult, CacheStatus, SongMovementLog,
+  SongSearchQuery, SongSearchResult, RecoverableSong, CacheStatus, SongMovementLog,
   PlaylistArchivedInfo, MergeReviewSummary, ActivityItem
 } from '../models/models';
 import { environment } from '../../environments/environment';
@@ -103,6 +103,17 @@ export class ApiService {
   }
   songLocations(videoId: string): Observable<string[]> {
     return this.http.get<string[]>(`${this.base}/songs/${videoId}/locations`);
+  }
+  recoverableSongs(): Observable<RecoverableSong[]> {
+    return this.http.get<RecoverableSong[]>(`${this.base}/songs/recoverable`);
+  }
+  // Encola recuperación como pendiente de subida (lista existente o nueva).
+  recoverSongs(req: {
+    targetPlaylistId?: string | null;
+    newPlaylistTitle?: string | null;
+    songs: { videoId: string; title: string; channelTitle?: string | null; thumbnailUrl?: string | null }[];
+  }): Observable<PendingUpload> {
+    return this.http.post<PendingUpload>(`${this.base}/songs/recover`, req);
   }
   songLocationsBatch(videoIds: string[]): Observable<Record<string, string[]>> {
     return this.http.post<Record<string, string[]>>(`${this.base}/songs/locations`, videoIds);
