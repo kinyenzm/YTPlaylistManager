@@ -98,6 +98,46 @@ public class PlaylistItemsCacheStore
         }
     }
 
+    /// <summary>
+    /// Snapshot playlistId → items fusionando todas las claves de usuario (ante repetido
+    /// gana la entrada con más items). Incluye el respaldo .bak si existe: cachés viejas
+    /// de listas ya borradas siguen contando como "canciones conocidas" para recuperación.
+    /// </summary>
+    public Dictionary<string, CachedItems> SnapshotAllPlaylists()
+    {
+        lock (_lock)
+        {
+            var merged = new Dictionary<string, CachedItems>();
+            foreach (var byPlaylist in LoadAllUnlocked().Values)
+                foreach (var (playlistId, entry) in byPlaylist)
+                    if (!merged.TryGetValue(playlistId, out var cur) || entry.Items.Count > cur.Items.Count)
+                        merged[playlistId] = entry;
+
+            // El .bak solo aporta playlists que el caché vigente YA NO tiene (p. ej.
+            // listas borradas cuya caché se invalidó); nunca pisa el estado actual.
+            foreach (var byPlaylist in LoadBakUnlocked().Values)
+                foreach (var (playlistId, entry) in byPlaylist)
+                    if (!merged.ContainsKey(playlistId))
+                        merged[playlistId] = entry;
+
+            return merged;
+        }
+    }
+
+    private Dictionary<string, Dictionary<string, CachedItems>> LoadBakUnlocked()
+    {
+        var bak = _path + ".bak";
+        if (!File.Exists(bak)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, CachedItems>>>(File.ReadAllText(bak)) ?? [];
+        }
+        catch
+        {
+            return [];   // respaldo corrupto → se ignora, no rompe el escaneo
+        }
+    }
+
     private Dictionary<string, Dictionary<string, CachedItems>> LoadAllUnlocked()
     {
         if (!File.Exists(_path)) return [];

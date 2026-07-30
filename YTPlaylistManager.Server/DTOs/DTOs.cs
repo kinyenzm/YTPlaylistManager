@@ -313,3 +313,20 @@ public record CacheStatusDto(
     int ArchivedPlaylistsCount
 );
 
+
+public record RecoverableSongDto(
+    string VideoId,
+    string Title,
+    string? ChannelTitle,
+    string? ThumbnailUrl,
+    string LastKnownPlaylist,   // dónde se la vio por última vez (lista borrada o evento)
+    DateTime? LastSeenUtc
+);
+
+public record RecoverSongItemDto(string VideoId, string Title, string? ChannelTitle, string? ThumbnailUrl);
+
+public record RecoverSongsRequest(
+    string? TargetPlaylistId,     // lista existente; null → crear una nueva
+    string? NewPlaylistTitle,     // requerido si no hay TargetPlaylistId
+    List<RecoverSongItemDto> Songs
+);

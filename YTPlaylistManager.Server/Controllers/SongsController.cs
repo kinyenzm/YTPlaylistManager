@@ -94,6 +94,26 @@ public class SongsController : ControllerBase
     public IActionResult RemoveItems([FromBody] RemoveItemsRequest req)
         => Ok(new { staged = _youtube.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
 
+    /// <summary>
+    /// Canciones huérfanas: conocidas por la app pero fuera de todas las playlists
+    /// actuales (listas borradas, remociones). 0 cuota — solo caché y actividad.
+    /// </summary>
+    [HttpGet("recoverable")]
+    [RequireGoogleSession]
+    [ProducesResponseType<List<RecoverableSongDto>>(StatusCodes.Status200OK)]
+    public IActionResult Recoverable()
+        => Ok(_youtube.GetRecoverableSongs());
+
+    /// <summary>
+    /// Encola la recuperación (lista existente o nueva) como pendiente de subida
+    /// reanudable; la subida real se hace desde el panel de pendientes.
+    /// </summary>
+    [HttpPost("recover")]
+    [RequireGoogleSession]
+    [ProducesResponseType<PendingUploadDto>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Recover([FromBody] RecoverSongsRequest req, CancellationToken ct)
+        => Ok(await _youtube.StageRecoveryAsync(req, ct));
+
     [HttpGet("pending-moves")]
     [RequireGoogleSession]
     [ProducesResponseType<List<PendingSongMoveDto>>(StatusCodes.Status200OK)]

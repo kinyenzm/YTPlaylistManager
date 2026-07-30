@@ -82,7 +82,6 @@ public sealed class AuthController(
         // no se rompe por esto.
         await ResolveAccountIdAndMigrate(http, token, ct);
 
-        // Redirige al frontend
         var ui = cfg["Cors:AllowedOrigins:0"] ?? "http://localhost:4200";
         return Redirect($"{ui}/?auth=ok");
     }
