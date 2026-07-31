@@ -118,9 +118,6 @@ export class ApiService {
   songLocationsBatch(videoIds: string[]): Observable<Record<string, string[]>> {
     return this.http.post<Record<string, string[]>>(`${this.base}/songs/locations`, videoIds);
   }
-  removeSongsFromPlaylist(playlistId: string, videoIds: string[]): Observable<{ staged: number }> {
-    return this.http.post<{ staged: number }>(`${this.base}/songs/remove-from-playlist`, { playlistId, videoIds });
-  }
   removeItemsFromPlaylist(playlistId: string, playlistItemIds: string[]): Observable<{ staged: number }> {
     return this.http.post<{ staged: number }>(`${this.base}/songs/remove-items`, { playlistId, playlistItemIds });
   }

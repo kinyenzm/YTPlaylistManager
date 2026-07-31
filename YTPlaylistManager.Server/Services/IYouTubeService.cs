@@ -20,7 +20,6 @@ public interface IYouTubeService
     PendingSongMoveDto? StageSongAssignment(AssignSongRequest req);
     List<string> GetSongLocations(string videoId);
     Dictionary<string, List<string>> GetSongLocationsBatch(List<string> videoIds);
-    int StageRemoveFromPlaylist(string playlistId, List<string> videoIds);
     int StageRemoveItemsFromPlaylist(string playlistId, List<string> playlistItemIds);
     List<PendingSongMoveDto> GetPendingSongMoves();
     Task<SongMoveUploadResultDto> UploadSongMoveAsync(string id, CancellationToken ct = default);

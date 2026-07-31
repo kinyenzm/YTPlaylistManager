@@ -104,14 +104,6 @@ export class CrossDuplicates {
   thumb(videoId: string): string {
     return `https://i.ytimg.com/vi/${videoId}/default.jpg`;
   }
-  listsFor(videoId: string): string[] {
-    const t = this.titleById();
-    return (this.locMap()[videoId] ?? []).map((id) => t[id] ?? id);
-  }
-  titlesOf(ids: string[]): string[] {
-    const t = this.titleById();
-    return ids.map((id) => t[id] ?? id);
-  }
   refsFor(ids: string[]): { id: string; title: string }[] {
     const t = this.titleById();
     return ids.map((id) => ({ id, title: t[id] ?? id }));

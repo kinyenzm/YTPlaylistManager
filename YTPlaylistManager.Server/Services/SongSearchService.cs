@@ -21,10 +21,6 @@ public interface ISongSearchService
 
     /// <summary>Historial/ubicaciones de una canción (derivado de la caché).</summary>
     SongMovementLogDto? GetSongTimeline(string videoId);
-
-    /// <summary>Playlists archivadas (no rastreado todavía → vacío).</summary>
-    [Obsolete("Use IYouTubeService.GetArchivedPlaylistsAsync instead.")]
-    List<PlaylistArchivedInfoDto> GetArchivedPlaylists();
 }
 
 /// <summary>
@@ -181,9 +177,6 @@ public class SongSearchService : ISongSearchService
 
         return new SongMovementLogDto(videoId, hits[0].Item.Title, events);
     }
-
-    [Obsolete("Use IYouTubeService.GetArchivedPlaylistsAsync instead.")]
-    public List<PlaylistArchivedInfoDto> GetArchivedPlaylists() => [];
 
     // ── Helpers de texto/fuzzy ──
 

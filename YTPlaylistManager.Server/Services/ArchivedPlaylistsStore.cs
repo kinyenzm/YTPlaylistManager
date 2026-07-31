@@ -37,9 +37,6 @@ public class ArchivedPlaylistsStore
         }
     }
 
-    public bool IsArchived(string playlistId) =>
-        LoadAll().Any(e => e.Id == playlistId);
-
     public void Add(IEnumerable<ArchivedPlaylistEntry> entries)
     {
         lock (_lock)
@@ -50,17 +47,6 @@ public class ArchivedPlaylistsStore
                 list.RemoveAll(x => x.Id == e.Id);
                 list.Add(e);
             }
-            File.WriteAllText(_path,
-                JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
-        }
-    }
-
-    public void Remove(string playlistId)
-    {
-        lock (_lock)
-        {
-            var list = LoadAll();
-            list.RemoveAll(x => x.Id == playlistId);
             File.WriteAllText(_path,
                 JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
         }

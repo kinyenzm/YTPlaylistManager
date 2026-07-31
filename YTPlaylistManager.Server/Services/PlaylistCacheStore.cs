@@ -37,14 +37,6 @@ public class PlaylistCacheStore
         }
     }
 
-    public void Clear()
-    {
-        lock (_lock)
-        {
-            if (File.Exists(_path)) File.Delete(_path);
-        }
-    }
-
     /// <summary>Re-etiqueta la caché a la clave nueva (migración de UserKey).</summary>
     public void MigrateToKey(string newKey)
     {

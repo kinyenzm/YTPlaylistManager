@@ -29,34 +29,4 @@ public class MergeReviewStore
         }
     }
 
-    public MergeReviewPlan? Get(string id) => LoadAll().FirstOrDefault(p => p.Id == id);
-
-    public MergeReviewPlan Add(MergeReviewPlan plan)
-    {
-        lock (_lock)
-        {
-            var list = LoadAll();
-            list.Add(plan);
-            Save(list);
-            return plan;
-        }
-    }
-
-    public void Remove(string id)
-    {
-        lock (_lock)
-        {
-            var list = LoadAll();
-            list.RemoveAll(p => p.Id == id);
-            Save(list);
-        }
-    }
-
-    public void Clear() => File.Delete(_path);
-
-    private void Save(List<MergeReviewPlan> list)
-    {
-        File.WriteAllText(_path,
-            JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
-    }
 }

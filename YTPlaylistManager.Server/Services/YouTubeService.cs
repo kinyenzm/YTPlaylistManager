@@ -5,7 +5,6 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Services;
-using Google.Apis.YouTube.v3;
 using Google.Apis.YouTube.v3.Data;
 using YTPlaylistManager.Server.Domain.Entities;
 using YTPlaylistManager.Server.Domain.Exceptions;
@@ -26,7 +25,6 @@ public class YouTubeService : IYouTubeService
     private readonly PendingSongMoveStore _songMoves;
     private readonly QuotaTracker _quota;
     private readonly ActivityBroadcaster _activity;
-    private readonly ApiKeyPool _apiKeyPool;
     private readonly PlaylistTouchStore _touchStore;
     private readonly ILogger<YouTubeService> _logger;
 
@@ -42,7 +40,6 @@ public class YouTubeService : IYouTubeService
         PendingSongMoveStore songMoves,
         QuotaTracker quota,
         ActivityBroadcaster activity,
-        ApiKeyPool apiKeyPool,
         PlaylistTouchStore touchStore,
         ILogger<YouTubeService> logger)
     {
@@ -57,7 +54,6 @@ public class YouTubeService : IYouTubeService
         _songMoves = songMoves;
         _quota = quota;
         _activity = activity;
-        _apiKeyPool = apiKeyPool;
         _touchStore = touchStore;
         _logger = logger;
     }
@@ -71,9 +67,6 @@ public class YouTubeService : IYouTubeService
         if (!string.IsNullOrEmpty(t?.AccountId)) return UserKeys.FromSeed(t.AccountId);
         return UserKeys.FromSeed(t?.RefreshToken ?? "anon");
     }
-
-    /// <summary>True si la excepción de Google es por cuota/límite de tasa (403).</summary>
-    private static bool IsQuotaError(Google.GoogleApiException ex) => QuotaTracker.IsQuotaError(ex);
 
     /// <summary>
     /// Ids de playlists vigentes según la caché de la lista (0 cuota). Devuelve null si
@@ -132,10 +125,7 @@ public class YouTubeService : IYouTubeService
     private List<PlaylistDto> AnnotateArchived(List<PlaylistDto> source, bool includeArchived)
     {
         var archived = _archivedStore.LoadAll();
-        if (archived.Count == 0)
-        {
-            return includeArchived ? source : source;
-        }
+        if (archived.Count == 0) return source;
 
         var archivedById = archived.ToDictionary(a => a.Id);
         var annotated = source.Select(p => archivedById.TryGetValue(p.Id, out var a)
@@ -246,7 +236,7 @@ public class YouTubeService : IYouTubeService
 
         try
         {
-            var items = await FetchItemsFromApiAsync(playlistId, ct);
+            var items = await FetchItemsAsync(BuildClient(), playlistId, ct);
             _itemsCache.Save(userKey, playlistId, items);  // guardar para no re-leer
             return items;
         }
@@ -261,32 +251,6 @@ public class YouTubeService : IYouTubeService
             }
             throw;
         }
-    }
-
-    private async Task<List<PlaylistItemDto>> FetchItemsFromApiAsync(string playlistId, CancellationToken ct)
-    {
-        // Pool de API keys activo → leemos items por API key (playlists públicas, sin OAuth) y rotamos
-        // de key al agotarse la cuota. Suma la cuota de varios proyectos para las LECTURAS.
-        if (_apiKeyPool.Enabled)
-        {
-            Google.GoogleApiException? lastQuota = null;
-            foreach (var key in _apiKeyPool.Keys)
-            {
-                try
-                {
-                    return await FetchItemsAsync(BuildReadClient(key), playlistId, ct);
-                }
-                catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
-                {
-                    lastQuota = ex;
-                    _logger.LogWarning("API key sin cuota leyendo {Playlist}; probando la siguiente.", playlistId);
-                }
-            }
-            if (lastQuota is not null) throw lastQuota; // todas las keys agotadas
-        }
-
-        // Sin pool → cliente OAuth normal (lee también privadas de la cuenta logueada).
-        return await FetchItemsAsync(BuildClient(), playlistId, ct);
     }
 
     private async Task<List<PlaylistItemDto>> FetchItemsAsync(
@@ -322,10 +286,6 @@ public class YouTubeService : IYouTubeService
 
         return result.OrderBy(x => x.Position).ToList();
     }
-
-    /// <summary>Cliente de solo-lectura con API key (sin OAuth) — para contenido público.</summary>
-    private Google.Apis.YouTube.v3.YouTubeService BuildReadClient(string apiKey)
-        => new(new BaseClientService.Initializer { ApiKey = apiKey, ApplicationName = "YTPlaylistManager" });
 
     public async Task<DuplicateReportDto> FindDuplicatesAsync(string playlistId, CancellationToken ct = default)
     {
@@ -701,7 +661,7 @@ public class YouTubeService : IYouTubeService
                 uploaded++;
                 processed++;
             }
-            catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
+            catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex))
             {
                 _quota.MarkExhausted();
                 paused = true;
@@ -782,7 +742,7 @@ public class YouTubeService : IYouTubeService
                     });
                     _itemsCache.Invalidate(userKey, s.Id);
                 }
-                catch (Google.GoogleApiException ex) when (IsQuotaError(ex))
+                catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex))
                 {
                     _quota.MarkExhausted();
                     paused = true;
@@ -853,15 +813,14 @@ public class YouTubeService : IYouTubeService
     {
         var userKey = CurrentUserKey();
         var known = KnownPlaylistIds();
-        return _pendingUploads.LoadForUser(userKey)
-            .Select(p => new PendingUploadDto(
-                p.Id, p.TargetPlaylistId, p.TargetPlaylistTitle,
-                p.Items.Count, (p.Items.Count + p.Sources.Count) * 50, p.CreatedAtUtc,
-                p.Items.Select(i => new PendingUploadItemDto(
-                    i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists)).ToList(),
-                p.Sources.Select(s => s.Title).ToList(),
-                known is not null && !known.Contains(p.TargetPlaylistId)))
-            .ToList();
+        return [.. _pendingUploads.LoadForUser(userKey)
+                .Select(p => new PendingUploadDto(
+                    p.Id, p.TargetPlaylistId, p.TargetPlaylistTitle,
+                    p.Items.Count, (p.Items.Count + p.Sources.Count) * 50, p.CreatedAtUtc,
+                [.. p.Items.Select(i => new PendingUploadItemDto(i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists))],
+                [.. p.Sources.Select(s => s.Title)],
+                    known is not null && !known.Contains(p.TargetPlaylistId)))
+               ];
     }
 
     /// <summary>Descarta un cambio pendiente y revierte la unión local del target.</summary>
@@ -870,7 +829,6 @@ public class YouTubeService : IYouTubeService
         var userKey = CurrentUserKey();
         var plan = _pendingUploads.Get(id);
         if (plan is null) return;
-        // Entradas huérfanas (UserKey anterior): si ya no tienen canciones que revertir, permitir limpieza.
         if (plan.UserKey != userKey && plan.Items.Count > 0)
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
 
@@ -1028,7 +986,7 @@ public class YouTubeService : IYouTubeService
                 realIdByLocal[t.LocalItemId] = inserted.Id;
                 added++;
             }
-            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; addRem.Add(t); }
+            catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; addRem.Add(t); }
             catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo agregar {Video} a {Pl}.", move.VideoId, t.PlaylistId); failed++; }
         }
         foreach (var r in move.RemoveFrom)
@@ -1043,7 +1001,7 @@ public class YouTubeService : IYouTubeService
                 _activity.Publish(new ActivityEvent("delete", move.Title, r.PlaylistTitle, move.VideoId, DateTime.UtcNow));
                 removed++;
             }
-            catch (Google.GoogleApiException ex) when (IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; remRem.Add(r); }
+            catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; remRem.Add(r); }
             catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) { removed++; }
             catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo quitar {Item} de {Pl}.", r.PlaylistItemId, r.PlaylistId); failed++; }
         }
@@ -1276,45 +1234,6 @@ public class YouTubeService : IYouTubeService
             }
         }
         return result;
-    }
-
-    /// <summary>Encola (staged) quitar varias canciones de UNA playlist. Devuelve cuántas encoló.</summary>
-    public int StageRemoveFromPlaylist(string playlistId, List<string> videoIds)
-    {
-        if (string.IsNullOrEmpty(playlistId) || videoIds is null || videoIds.Count == 0) return 0;
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
-        var title = cache?.Playlists?.FirstOrDefault(p => p.Id == playlistId)?.Title ?? playlistId;
-        var items = _itemsCache.Load(userKey, playlistId);
-        if (items is null) return 0;
-
-        var removedItemIds = new HashSet<string>(StringComparer.Ordinal);
-        int staged = 0;
-        foreach (var vid in videoIds.Distinct())
-        {
-            var hit = items.FirstOrDefault(i => i.VideoId == vid);
-            if (hit is null) continue;
-            _songMoves.Add(new PendingSongMove
-            {
-                Id = Guid.NewGuid().ToString("N")[..12],
-                UserKey = userKey,
-                VideoId = vid,
-                Title = hit.Title,
-                ChannelTitle = hit.ChannelTitle,
-                ThumbnailUrl = hit.ThumbnailUrl,
-                AddTo = [],
-                RemoveFrom = [new SongMoveRemoval { PlaylistId = playlistId, PlaylistTitle = title, PlaylistItemId = hit.PlaylistItemId }],
-                CreatedAtUtc = DateTime.UtcNow,
-            });
-            removedItemIds.Add(hit.PlaylistItemId);
-            staged++;
-        }
-        if (removedItemIds.Count > 0)
-            _itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());
-
-        if (staged > 0) _touchStore.Touch(playlistId);
-        _log.Add("RemoveFromList(local)", $"playlist={playlistId} staged={staged}");
-        return staged;
     }
 
     /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist. Local-first: deja en cola para sincronizar al Subir.</summary>

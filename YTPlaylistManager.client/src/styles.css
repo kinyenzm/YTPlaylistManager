@@ -151,7 +151,6 @@ header.app-header h2 a:hover::before {
 }
 .app-header__search-icon { color: var(--muted); flex-shrink: 0; }
 .app-header__search-ph { flex: 1; text-align: left; color: var(--muted); font-weight: 400; }
-.app-header__search-hint { display: none; }
 .app-header__search-kbd {
   font-size: 0.7rem;
   background: var(--panel-2);
@@ -161,15 +160,6 @@ header.app-header h2 a:hover::before {
   color: var(--muted);
   font-family: var(--font-body);
   flex-shrink: 0;
-}
-.lang-select {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 0.85rem;
-  padding: 5px 8px;
-  cursor: pointer;
 }
 .app-header__nav {
   display: flex;
@@ -620,11 +610,6 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cmd-palette__item-kind { font-size: 0.88rem; flex-shrink: 0; }
 .cmd-palette__item-kind--playlist { color: var(--accent2); }
 .cmd-palette__item-kind--song { color: #ff4040; }
-.cmd-palette__badge {
-  font-size: 0.72rem; background: rgba(198,242,78,0.15);
-  color: var(--accent2); border-radius: 999px;
-  padding: 1px 7px; flex-shrink: 0;
-}
 .cmd-palette__empty { padding: 16px; color: var(--muted); font-size: 0.88rem; text-align: center; }
 .cmd-palette__footer {
   display: flex; gap: 16px; padding: 8px 16px;
@@ -687,7 +672,6 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 
 /* ── Tipografía ── */
 .accent       { color: var(--accent2); }
-.weight-strong { font-weight: 600; }
 
 /* ── Tags ── */
 .tag--danger { background: var(--accent); color: #fff; }
@@ -711,8 +695,6 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cross-org__actions-card   { margin-top: 12px; }
 .cross-org__actions-row    { margin-top: 8px; }
 /* Barra de búsqueda bySong: nombre completo arriba, filtros finos abajo */
-.cross-org__search-bar { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.cross-org__search-main { font-size: 1.1rem; padding: 12px 16px; border-radius: 12px; }
 /* Icono sutil antes del canal y del label "Aparece en:" */
 .cross-org__meta-icon { font-size: 0.78em; opacity: 0.55; margin-right: 5px; }
 .cross-org__summary        { margin-top: 12px; }

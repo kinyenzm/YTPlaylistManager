@@ -206,7 +206,7 @@
           <span class="tag tag--danger">{{ 'cross.unavailable_tag' | translate }}</span>
           }
         </div>
-        <div class="muted cross-org__channel"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
+        <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
           it.channelTitle }}</div>
         @if (refsFor(locMap()[it.videoId]).length) {
         <div class="row row--tags">
@@ -302,7 +302,7 @@
         <span class="tag" style="margin-left:6px">en {{ r.appearsInCount }} listas</span>
         }
       </div>
-      <div class="muted cross-org__channel"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
+      <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
         r.channelTitle }}</div>
       <div class="row row--tags">
         <span class="muted"><i class="fa-solid fa-list-ul cross-org__meta-icon"></i>{{ 'cross.appears_in' | translate
@@ -407,7 +407,7 @@
           (click)="$event.stopPropagation()">{{ r.title }}</a>
       </div>
       @if (r.channelTitle) {
-      <div class="muted cross-org__channel"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
+      <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{
         r.channelTitle }}</div>
       }
       <div class="row row--tags">

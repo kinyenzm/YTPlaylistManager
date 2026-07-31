@@ -191,8 +191,6 @@ public record SongMoveBulkResultDto(
     int RemainingMoves    // cuántos quedan en la cola
 );
 
-public record RemoveFromPlaylistRequest(string PlaylistId, List<string> VideoIds);
-
 public record RemoveItemsRequest(string PlaylistId, List<string> PlaylistItemIds);
 
 public record QuotaDto(int Used, int Limit, int Remaining, string Date);
@@ -212,21 +210,6 @@ public record MergeReviewSourceDto(
     string PlaylistId,
     string Title,
     int ItemCount
-);
-
-public record ApplyMergeReviewResultDto(
-    string TargetPlaylistId,
-    string TargetPlaylistTitle,
-    int AddedItems,
-    int ArchivedSources
-);
-
-public record PendingMergeDto(
-    string Id,
-    string TargetPlaylistId,
-    string TargetPlaylistTitle,
-    int PendingCount,
-    DateTime CreatedAtUtc
 );
 
 // ── Clasificación IA ──
