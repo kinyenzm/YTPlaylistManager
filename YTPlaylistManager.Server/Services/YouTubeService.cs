@@ -335,16 +335,18 @@ public class YouTubeService : IYouTubeService
             groups.Add(new DuplicateGroupDto(g.Key, "videoId", g.OrderBy(x => x.Position).ToList()));
         }
 
-        // Por título normalizado (capta "misma canción con distinto video")
-        var alreadyFlagged = new HashSet<string>(groups.SelectMany(g => g.Items).Select(i => i.PlaylistItemId));
+        // Por título normalizado (capta "misma canción con distinto video"). Se colapsa a un
+        // representante por videoId: las copias exactas ya las cubre el grupo de arriba, y sin
+        // este colapso el caso «2 copias del video A + 1 del video B» escondía al B — sus
+        // compañeros de título quedaban "ya marcados" y un grupo de 1 se descartaba.
         foreach (var g in items
-                     .Where(x => !VideoAvailability.IsUnavailable(x.Title))
+                     .Where(x => !string.IsNullOrEmpty(x.VideoId) && !VideoAvailability.IsUnavailable(x.Title))
                      .GroupBy(x => Normalize(x.Title))
-                     .Where(g => g.Count() > 1 && !string.IsNullOrWhiteSpace(g.Key)))
+                     .Where(g => !string.IsNullOrWhiteSpace(g.Key)))
         {
-            var dupes = g.Where(x => !alreadyFlagged.Contains(x.PlaylistItemId)).ToList();
-            if (dupes.Count > 1)
-                groups.Add(new DuplicateGroupDto(g.Key, "normalizedTitle", dupes.OrderBy(x => x.Position).ToList()));
+            var byVideo = g.OrderBy(x => x.Position).DistinctBy(x => x.VideoId).ToList();
+            if (byVideo.Count > 1)
+                groups.Add(new DuplicateGroupDto(g.Key, "normalizedTitle", byVideo));
         }
 
         var dupCount = groups.Sum(g => g.Items.Count - 1);
@@ -421,13 +423,22 @@ public class YouTubeService : IYouTubeService
                 "La playlist no está en caché. Abrila una vez desde la app para que se cargue y volvé a intentar.");
         }
 
+        // Por título nunca se tocan los videos privados/eliminados (su título placeholder es
+        // idéntico entre canciones distintas) ni los títulos que normalizan a vacío:
+        // agruparlos borraría canciones reales que solo comparten el placeholder.
+        var untouchable = req.Strategy == "normalizedTitle"
+            ? items.Where(x => VideoAvailability.IsUnavailable(x.Title) || string.IsNullOrWhiteSpace(Normalize(x.Title))).ToList()
+            : [];
+        var untouchableIds = untouchable.Select(x => x.PlaylistItemId).ToHashSet(StringComparer.Ordinal);
+        var dedupable = items.Where(x => !untouchableIds.Contains(x.PlaylistItemId));
+
         // Mantenemos el primero de cada grupo (menor Position), eliminamos el resto.
         IEnumerable<IGrouping<string, PlaylistItemDto>> groups = req.Strategy == "normalizedTitle"
-            ? items.GroupBy(x => Normalize(x.Title))
-            : items.Where(x => !string.IsNullOrEmpty(x.VideoId)).GroupBy(x => x.VideoId);
+            ? dedupable.GroupBy(x => Normalize(x.Title))
+            : dedupable.Where(x => !string.IsNullOrEmpty(x.VideoId)).GroupBy(x => x.VideoId);
 
         var keepIds = new HashSet<string>();
-        var toKeep = new List<PlaylistItemDto>();
+        var toKeep = new List<PlaylistItemDto>(untouchable);
         int removed = 0;
         int kept = 0;
 
@@ -444,6 +455,7 @@ public class YouTubeService : IYouTubeService
 
         // Reordenar por Position para que la lista se vea coherente.
         toKeep = toKeep.OrderBy(x => x.Position).ToList();
+        kept = toKeep.Count;   // incluye las no deduplicables conservadas
 
         _itemsCache.Save(userKey, req.PlaylistId, toKeep);
         _touchStore.Touch(req.PlaylistId);
