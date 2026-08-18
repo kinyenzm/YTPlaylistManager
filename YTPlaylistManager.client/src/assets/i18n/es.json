@@ -231,7 +231,10 @@
     "song_label": "Canción:",
     "no_events": "Sin eventos",
     "error_load": "No se pudieron cargar los datos: {{msg}}",
-    "error_history": "No se pudo cargar el historial: {{msg}}"
+    "error_history": "No se pudo cargar el historial: {{msg}}",
+    "tab_history": "Historial por canción",
+    "history_intro": "Buscá una canción por nombre o por id para ver por qué listas pasó. Se lee de la caché: no gasta cuota.",
+    "history_search_ph": "Nombre de la canción o videoId…"
   },
   "cmd": {
     "placeholder": "Playlist, canción, canal o video ID…",

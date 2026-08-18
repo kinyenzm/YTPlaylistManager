@@ -1,5 +1,5 @@
 <div class="row row--between">
-  <h3 style="margin:0">{{ 'playlists.title' | translate }}</h3>
+  <h3 class="page-title">{{ 'playlists.title' | translate }}</h3>
   @if (authenticated()) {
     <button class="secondary" (click)="openRefreshConfirm()" [disabled]="loading() || refreshing()">
       @if (refreshing()) {
@@ -13,26 +13,15 @@
 <p class="muted">{{ 'playlists.intro' | translate }}</p>
 
 @if (authChecked() && !authenticated()) {
-  <div class="card">{{ 'playlists.not_connected' | translate }}</div>
+  <app-empty-state>{{ 'playlists.not_connected' | translate }}</app-empty-state>
 }
 
 @if (loading()) {
-  <div class="grid">
-    @for (_ of [1,2,3,4,5,6]; track $index) {
-      <div class="card--skeleton">
-        <div class="row">
-          <span class="skeleton skeleton--thumb"></span>
-        </div>
-        <span class="skeleton skeleton--title"></span>
-        <span class="skeleton skeleton--text" style="width:55%"></span>
-        <span class="skeleton skeleton--meta"></span>
-      </div>
-    }
-  </div>
+  <app-skeleton-list variant="card" [count]="6" />
 }
 
-@if (error()) {
-  <div class="card danger">{{ error() }}</div>
+@if (error(); as e) {
+  <app-empty-state [danger]="true">{{ e }}</app-empty-state>
 }
 
 @if (selectedIds().size > 1) {
@@ -50,9 +39,9 @@
         {{ (previewing() ? 'playlists.previewing' : 'playlists.preview_button') | translate }}
       </button>
     </div>
-    <div class="muted" style="margin-top:4px">{{ 'playlists.merge_helper' | translate }}</div>
+    <div class="muted pending__quota">{{ 'playlists.merge_helper' | translate }}</div>
     @if (mergeResult(); as mr) {
-      <div class="muted" style="margin-top:8px">{{ 'playlists.merge_staged' | translate:{ n: mr.added } }}</div>
+      <div class="muted pending__note">{{ 'playlists.merge_staged' | translate:{ n: mr.added } }}</div>
     }
   </div>
 }
@@ -108,21 +97,18 @@
 </div>
 
 @if (refreshConfirmOpen()) {
-  <div class="modal-backdrop" (click)="cancelRefresh()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <app-modal (dismiss)="cancelRefresh()">
       <h3 class="modal__title">⚠ {{ 'playlists.refresh_all_confirm_title' | translate }}</h3>
       <p>{{ 'playlists.refresh_all_confirm_body' | translate:{ playlists: refreshEstimate().playlists, quota: refreshEstimate().quota } }}</p>
       <div class="row row--modal-actions">
         <button class="secondary" (click)="cancelRefresh()">{{ 'common.cancel' | translate }}</button>
         <button (click)="confirmRefresh()">{{ 'playlists.refresh_all' | translate }}</button>
       </div>
-    </div>
-  </div>
+  </app-modal>
 }
 
 @if (refreshResult(); as r) {
-  <div class="modal-backdrop" (click)="dismissRefreshResult()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <app-modal (dismiss)="dismissRefreshResult()">
       <h3 class="modal__title">✓ {{ 'playlists.refresh_all_done' | translate:{ playlists: r.playlistsRefreshed, items: r.itemsRefreshed, quota: r.quotaUsed } }}</h3>
       @if (r.playlistsSkipped > 0) {
         <p class="muted">{{ 'playlists.refresh_all_partial' | translate:{ skipped: r.playlistsSkipped } }}</p>
@@ -130,13 +116,11 @@
       <div class="row row--modal-actions">
         <button (click)="dismissRefreshResult()">OK</button>
       </div>
-    </div>
-  </div>
+  </app-modal>
 }
 
 @if (preview(); as pv) {
-  <div class="modal-backdrop" (click)="cancelPreview()">
-    <div class="modal modal--large" (click)="$event.stopPropagation()">
+  <app-modal size="large" (dismiss)="cancelPreview()">
       <h3 class="modal__title">{{ 'playlists.preview_title' | translate:{ title: pv.targetPlaylistTitle } }}</h3>
       <p class="muted">{{ 'playlists.preview_summary' | translate:{ add: pv.toAddCount, present: pv.alreadyPresentCount } }}</p>
 
@@ -145,7 +129,7 @@
       }
 
       @if (pv.toAddCount === 0) {
-        <div class="card">{{ 'playlists.preview_nothing' | translate }}</div>
+        <app-empty-state>{{ 'playlists.preview_nothing' | translate }}</app-empty-state>
       } @else {
         <div class="modal__list">
           @for (s of pv.toAdd; track s.videoId) {
@@ -177,16 +161,9 @@
           </button>
         </div>
       </div>
-    </div>
-  </div>
+  </app-modal>
 }
 
 @if (merging()) {
-  <div class="busy-overlay">
-    <div class="busy-card">
-      <h4>{{ 'playlists.merge_apply_title' | translate }}</h4>
-      <div class="progress indeterminate"><div class="bar"></div></div>
-      <p class="muted cross-org__busy-desc">{{ 'playlists.merge_apply_desc' | translate }}</p>
-    </div>
-  </div>
+  <app-busy-overlay titleKey="playlists.merge_apply_title" descKey="playlists.merge_apply_desc" />
 }

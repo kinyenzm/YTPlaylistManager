@@ -1,0 +1,57 @@
+<div class="card" [class.card--selectable]="selectable()" [class.card--draft]="changed()" (click)="onCardClick()">
+  <div class="row cross-org__song-row">
+    <img [src]="thumb()" class="thumb" alt="" />
+    <div class="cross-org__song-body">
+      <div>
+        <a [href]="watchUrl()" target="_blank" rel="noopener" (click)="$event.stopPropagation()">{{ title() }}</a>
+        @if (unavailable()) {
+          <span class="tag tag--danger">{{ 'cross.unavailable_tag' | translate }}</span>
+        }
+        @if (countBadge() > 1) {
+          <span class="tag tag--inline">{{ 'cross.in_count' | translate:{ count: countBadge() } }}</span>
+        }
+      </div>
+      @if (channelTitle()) {
+        <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{ channelTitle() }}</div>
+      }
+      @if (refs().length || additions().length) {
+        <div class="row row--tags">
+          <span class="muted"><i class="fa-solid fa-list-ul cross-org__meta-icon"></i>{{ 'cross.appears_in' | translate }}</span>
+          @for (ref of refs(); track ref.id) {
+            @if (unavailable()) {
+              <span class="tag">{{ ref.title }}</span>
+            } @else {
+              <span class="tag tag--editable" [class.tag--staged-out]="drafts.isStagedRemoved(videoId(), ref.id)">
+                {{ ref.title }}
+                <button type="button" class="tag__remove-btn"
+                  (click)="$event.stopPropagation(); drafts.toggleRemoval(videoId(), title(), currentIds(), ref.id)"
+                  [title]="(drafts.isStagedRemoved(videoId(), ref.id) ? 'cross.badge_restore' : 'cross.badge_remove') | translate">
+                  @if (drafts.isStagedRemoved(videoId(), ref.id)) {
+                    <i class="fa-solid fa-rotate-left"></i>
+                  } @else {
+                    <i class="fa-solid fa-xmark"></i>
+                  }
+                </button>
+              </span>
+            }
+          }
+          @for (ref of additions(); track ref.id) {
+            <span class="tag tag--staged-added">+ {{ ref.title }}</span>
+          }
+        </div>
+      }
+      @if (changed()) {
+        <div class="row row--actions">
+          <button type="button" class="link-btn" (click)="$event.stopPropagation(); drafts.discard(videoId())">
+            {{ 'cross.draft_undo' | translate }}
+          </button>
+        </div>
+      }
+    </div>
+    @if (showAssign() && !unavailable()) {
+      <button class="secondary" (click)="$event.stopPropagation(); assign.emit()">
+        {{ 'cross.assign_open' | translate }}
+      </button>
+    }
+  </div>
+</div>

@@ -643,6 +643,14 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .skeleton--title { height: 18px; margin-bottom: 8px; width: 70%; }
 .skeleton--meta  { height: 11px; width: 45%; }
 .skeleton--thumb { width: 40px; height: 30px; border-radius: 5px; flex-shrink: 0; }
+/* thumb-lg acompaña a .thumb (84x56); --thumb sigue en 40x30 para la paleta. */
+.skeleton--thumb-lg { width: 84px; height: 56px; border-radius: 9px; flex-shrink: 0; }
+.skeleton--icon  { width: 36px; height: 36px; border-radius: 6px; flex-shrink: 0; }
+.skeleton--half  { width: 50%; }
+.skeleton--wide  { width: 70%; }
+.skeleton--short { width: 40%; }
+.skeleton--badge { width: 30px; }
+.skeleton__stack { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 /* Card skeleton completa */
 .card--skeleton {
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
@@ -683,13 +691,16 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .card__title     { margin: 8px 0 4px; }
 .card__date      { font-size: .85em; margin-top: 4px; }
 .card__queue-tag { margin: 0 0 6px; }
+.card__header    { margin-bottom: 16px; }
 .card--warning   { padding: 8px 12px; margin-bottom: 8px; }
 .card--accent    { border-color: var(--accent2); }
 
 /* ── Modal ── */
 .modal--large  { max-width: 640px; max-height: 82vh; overflow: auto; }
 .modal--wide   { max-width: 700px; width: 94vw; max-height: 86vh; overflow: auto; }
+.modal--tall   { max-width: 540px; max-height: 84vh; overflow: auto; }
 .modal__title  { margin-top: 0; }
+.page-title    { margin: 0; }
 .modal__list   { margin: 8px 0; }
 .modal__intro  { margin: 6px 0 0; }
 
@@ -713,8 +724,10 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 /* Barra de búsqueda bySong: nombre completo arriba, filtros finos abajo */
 /* Icono sutil antes del canal y del label "Aparece en:" */
 .cross-org__meta-icon { font-size: 0.78em; opacity: 0.55; margin-right: 5px; }
+.cross-org__filter-name { flex: 2; min-width: 200px; }
+.cross-org__filter-id   { flex: 1; min-width: 140px; }
 .cross-org__summary        { margin-top: 12px; }
-.cross-org__empty-card     { margin-top: 10px; }
+.empty-card { margin-top: 10px; }
 .cross-org__song-list      { margin-top: 12px; }
 .cross-org__song-row       { align-items: flex-start; gap: 8px; }
 .cross-org__song-body      { flex: 1; min-width: 0; }
@@ -726,6 +739,14 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cross-org__section-heading { margin: 6px 0; }
 .cross-org__section-list   { margin: 0; padding-left: 18px; }
 .cross-org__list-scroller  { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 6px; }
-.cross-org__modal          { max-width: 540px; max-height: 84vh; overflow: auto; }
 .cross-org__busy-desc      { margin: 12px 0 0; }
 .cross-org__select         { flex: 1; }
+
+/* ── Historial: rejilla de contadores, pestañas y línea de tiempo ── */
+.grid--stats { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 16px; }
+.tab-content { animation: fadeIn 0.2s; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.timeline        { margin-top: 16px; }
+.timeline__item  { display: flex; gap: 12px; margin-bottom: 12px; }
+.timeline__dot   { width: 12px; height: 12px; background: var(--accent2); border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+.timeline__event { margin: 0 0 2px; }

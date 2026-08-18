@@ -231,7 +231,10 @@
     "song_label": "Song:",
     "no_events": "No events",
     "error_load": "Error loading cache: {{msg}}",
-    "error_history": "Error loading song history: {{msg}}"
+    "error_history": "Error loading song history: {{msg}}",
+    "tab_history": "Song history",
+    "history_intro": "Search a song by name or id to see which playlists it went through. Read from cache: no quota used.",
+    "history_search_ph": "Song name or videoId…"
   },
   "cmd": {
     "placeholder": "Playlist, song, channel or video ID…",

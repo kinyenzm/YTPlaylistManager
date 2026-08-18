@@ -1,0 +1,25 @@
+<app-modal size="tall" (dismiss)="closed.emit()">
+  <h3 class="modal__title">{{ title() }}</h3>
+  <p class="muted">{{ 'cross.assign_help' | translate }}</p>
+
+  @if (loading()) {
+    <app-skeleton-list variant="option" [count]="3" />
+  } @else {
+    <div class="cross-org__list-scroller">
+      @for (pl of ordered(); track pl.id) {
+        <label class="opt-row" [class.on]="isChecked(pl.id)">
+          <input type="checkbox" [checked]="isChecked(pl.id)" (change)="toggle(pl.id)" />
+          <span class="flex-fill">{{ pl.title }}</span>
+          <span class="muted">{{ pl.itemCount }}</span>
+        </label>
+      }
+    </div>
+    <div class="row row--modal-footer">
+      <span class="muted">{{ 'cross.assign_summary' | translate:{ n: selectedCount() } }}</span>
+      <div class="row row--btn-group">
+        <button class="secondary" (click)="closed.emit()">{{ 'common.cancel' | translate }}</button>
+        <button (click)="apply()">{{ 'cross.assign_apply' | translate }}</button>
+      </div>
+    </div>
+  }
+</app-modal>

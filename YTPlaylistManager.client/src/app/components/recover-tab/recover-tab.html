@@ -1,0 +1,68 @@
+<p class="muted cross-org__summary">{{ 'cross.recover_intro' | translate }}</p>
+
+<div class="row toolbar cross-org__actions-row">
+  <button class="secondary" (click)="load()" [disabled]="loading()">
+    {{ 'cross.recover_reload' | translate }}
+  </button>
+  @if (songs().length > 0) {
+    <select [ngModel]="listFilter()" (ngModelChange)="listFilter.set($event)">
+      <option value="">{{ 'cross.recover_filter_all' | translate:{ n: songs().length } }}</option>
+      @for (l of sourceLists(); track l.name) {
+        <option [value]="l.name">{{ l.name }} ({{ l.n }})</option>
+      }
+    </select>
+    <button class="secondary" (click)="toggleAll()">
+      {{ (allSelected() ? 'cross.recover_unselect_all' : 'cross.recover_select_all') | translate }}
+    </button>
+    <select [ngModel]="targetId()" (ngModelChange)="targetId.set($event)">
+      <option value="">{{ 'cross.recover_new_list_opt' | translate }}</option>
+      @for (pl of playlists(); track pl.id) {
+        <option [value]="pl.id">{{ pl.title }}</option>
+      }
+    </select>
+    @if (!targetId()) {
+      <input type="text" class="flex-fill" [ngModel]="newTitle()" (ngModelChange)="newTitle.set($event)"
+        [placeholder]="'cross.recover_new_list_ph' | translate" />
+    }
+    <button (click)="stage()" [disabled]="selection().size === 0 || staging()">
+      {{ (staging() ? 'cross.recover_staging' : 'cross.recover_stage_btn') | translate:{ n: selection().size } }}
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <app-skeleton-list [count]="5" />
+} @else if (songs().length > 0) {
+  <p class="muted cross-org__summary">
+    {{ 'cross.recover_count' | translate:{ n: filtered().length } }}
+    @if (selection().size > 0) {
+      <span class="tag tag--staged-added">
+        {{ 'cross.recover_selected' | translate:{ n: selection().size, total: filtered().length } }}
+      </span>
+    }
+  </p>
+  @for (r of filtered(); track r.videoId) {
+    <div class="card card--selectable" [class.card--selected]="selection().has(r.videoId)" (click)="toggle(r.videoId)">
+      <div class="row cross-org__song-row">
+        <img [src]="r.thumbnailUrl || thumb(r.videoId)" class="thumb" alt="" />
+        <div class="cross-org__song-body">
+          <div>
+            <a [href]="'https://www.youtube.com/watch?v=' + r.videoId" target="_blank" rel="noopener"
+              (click)="$event.stopPropagation()">{{ r.title }}</a>
+          </div>
+          @if (r.channelTitle) {
+            <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{ r.channelTitle }}</div>
+          }
+          <div class="row row--tags">
+            <span class="muted">
+              <i class="fa-solid fa-clock-rotate-left cross-org__meta-icon"></i>{{ 'cross.recover_last_seen' | translate }}
+            </span>
+            <span class="tag">{{ r.lastKnownPlaylist }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+} @else if (loaded()) {
+  <app-empty-state>{{ 'cross.recover_empty' | translate }}</app-empty-state>
+}

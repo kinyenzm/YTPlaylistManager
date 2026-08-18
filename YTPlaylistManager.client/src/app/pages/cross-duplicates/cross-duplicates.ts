@@ -9,46 +9,44 @@ import {
   inject,
   input,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Title } from '@angular/platform-browser';
-import { debounceTime, delay, finalize, firstValueFrom, Subject } from 'rxjs';
+import { debounceTime, delay, finalize, Subject } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
+import { DraftsService } from '../../services/drafts.service';
 import { PendingService } from '../../services/pending.service';
-import { looksLikeVideoId, thumbUrl } from '../../utils/youtube.utils';
-import {
-  ClassifyResult,
-  CrossDuplicate,
-  CrossDuplicateReport,
-  DuplicateReport,
-  Playlist,
-  PlaylistItem,
-  RecoverableSong,
-  SongSearchResult,
-} from '../../models/models';
+import { CrossDuplicateReport, Playlist, PlaylistItem, SongSearchResult } from '../../models/models';
+import { looksLikeVideoId } from '../../utils/youtube.utils';
+import { AssignModal } from '../../components/assign-modal/assign-modal';
+import { ListTools } from '../../components/list-tools/list-tools';
+import { RecoverTab } from '../../components/recover-tab/recover-tab';
+import { SongCard } from '../../components/song-card/song-card';
+import { BusyOverlay } from '../../components/ui/busy-overlay';
+import { EmptyState } from '../../components/ui/empty-state';
+import { SkeletonList } from '../../components/ui/skeleton-list';
 
 type Mode = 'repeated' | 'byList' | 'bySong' | 'recover';
-interface SongRow {
-  videoId: string;
-  title: string;
-}
 
-// Borrador local de una canción: baseline = listas donde está según caché al momento
-// de editar; desired = listas donde debe quedar. Nada toca la API hasta "Guardar todo".
-interface SongDraft {
-  title: string;
-  baseline: string[];
-  desired: string[];
-}
-
+/**
+ * Organizador: elige el modo, carga sus datos y coordina los borradores.
+ * Las herramientas de lista, la recuperación y el editor de asignación viven
+ * en sus propios componentes.
+ */
 @Component({
   selector: 'app-cross-duplicates',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, FormsModule, TranslateModule],
+  imports: [
+    RouterLink, FormsModule, TranslateModule,
+    AssignModal, ListTools, RecoverTab, SongCard,
+    BusyOverlay, EmptyState, SkeletonList,
+  ],
+  providers: [DraftsService],
   templateUrl: './cross-duplicates.html',
 })
 export class CrossDuplicates {
@@ -59,12 +57,16 @@ export class CrossDuplicates {
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly pendingSvc = inject(PendingService);
+  protected readonly drafts = inject(DraftsService);
   protected readonly connected = this.auth.connected;
 
+  private readonly listTools = viewChild(ListTools);
+  private readonly recoverTab = viewChild(RecoverTab);
+
   // Ruta /organizar/lista/:id → abre directo en modo "por lista".
-  // Sin :id la página arranca en "repetidas".
   readonly id = input<string>();
-  // Query param ?q=<videoId> → modo "por canción" pre-buscado (desde command palette, funciona estando ya en la ruta).
+  // Query param ?q=<videoId> → modo "por canción" pre-buscado (command palette).
   readonly q = input<string>();
 
   protected readonly mode = signal<Mode>('repeated');
@@ -72,7 +74,7 @@ export class CrossDuplicates {
   protected readonly error = signal<string | null>(null);
   protected readonly allPlaylists = signal<Playlist[]>([]);
 
-  // id → título (para mostrar "en qué listas está")
+  // id → título, para pintar los tags "aparece en".
   protected readonly titleById = computed<Record<string, string>>(() => {
     const m: Record<string, string> = {};
     for (const p of this.allPlaylists()) m[p.id] = p.title;
@@ -81,109 +83,26 @@ export class CrossDuplicates {
   // videoId → ids de listas (modo "por lista", cargado en lote)
   protected readonly locMap = signal<Record<string, string[]>>({});
 
-  // Ordenados: primero las canciones que están en más de una playlist.
-  protected readonly listItemsSorted = computed(() => {
-    const m = this.locMap();
-    return [...this.listItems()].sort(
-      (a, b) => (m[b.videoId]?.length ?? 0) - (m[a.videoId]?.length ?? 0),
-    );
-  });
-  protected readonly resultsSorted = computed(() =>
-    [...this.results()].sort((a, b) => (b.appearsInCount ?? 0) - (a.appearsInCount ?? 0)),
-  );
-  protected readonly resultsDeduped = computed(() => {
-    const seen = new Set<string>();
-    return this.resultsSorted().filter(r => {
-      if (seen.has(r.videoId)) return false;
-      seen.add(r.videoId);
-      return true;
-    });
-  });
+  // Modo "repetidas"
+  protected readonly report = signal<CrossDuplicateReport | null>(null);
   protected readonly groupsSorted = computed(() => {
     const r = this.report();
     return r ? [...r.groups].sort((a, b) => b.playlistCount - a.playlistCount) : [];
   });
 
-  thumb(videoId: string): string {
-    return thumbUrl(videoId);
-  }
-  refsFor(ids: string[]): { id: string; title: string }[] {
-    const t = this.titleById();
-    return ids.map((id) => ({ id, title: t[id] ?? id }));
-  }
-  playlistIdsOf(g: CrossDuplicate): string[] {
-    return g.playlists.map((p) => p.playlistId);
-  }
-  isUnavailable(title: string): boolean {
-    const t = title?.trim().toLowerCase();
-    return t === 'private video' || t === 'deleted video';
-  }
-
-  // Modo "repetidas"
-  protected readonly report = signal<CrossDuplicateReport | null>(null);
-
   // Modo "por lista"
   protected readonly listId = signal<string>('');
   protected readonly listItems = signal<PlaylistItem[]>([]);
+  protected readonly loadingItems = signal(false);
   protected readonly listTitle = computed(() => this.titleById()[this.listId()] ?? null);
-
   // Canciones de esa lista repetidas en otras (badge rojo del selector)
   protected readonly dupCounts = signal<Record<string, number>>({});
-
-  // ── Herramientas de lista ──
-  protected readonly duplicates = signal<DuplicateReport | null>(null);
-  protected readonly classification = signal<ClassifyResult | null>(null);
-  protected readonly loadingItems = signal(false);
-  protected readonly loadingDup = signal(false);
-  protected readonly cleaning = signal(false);
-  protected readonly classifying = signal(false);
-  protected readonly strategy = signal<'videoId' | 'normalizedTitle'>('videoId');
-  protected readonly aiMode = signal<'genre' | 'mood' | 'decade'>('genre');
-  protected readonly stagedMsg = signal<string | null>(null);
-  protected readonly aiError = signal<string | null>(null);
-
-  protected readonly classKeys = computed(() => {
-    const c = this.classification();
-    return c ? Object.keys(c.groups) : [];
-  });
-
-  // Similares (mismo título, distinto video) primero; exactas (mismo video) después.
-  protected readonly dupGroupsSorted = computed(() => {
-    const d = this.duplicates();
-    if (!d) return [];
-    const rank = (m: string) => (m === 'normalizedTitle' ? 0 : 1);
-    return [...d.groups].sort((a, b) => rank(a.matchType) - rank(b.matchType));
-  });
-
-  // Modo "recuperar" — huérfanas: conocidas por la app pero fuera de toda playlist actual
-  protected readonly recoverable = signal<RecoverableSong[]>([]);
-  protected readonly loadingRecover = signal(false);
-  protected readonly recoverLoaded = signal(false);
-  // Selección múltiple + destino (lista existente o nueva) para encolar la recuperación.
-  protected readonly recoverSel = signal<ReadonlySet<string>>(new Set());
-  protected readonly recoverTargetId = signal<string>('');   // '' = crear lista nueva
-  protected readonly recoverNewTitle = signal<string>('');
-  protected readonly stagingRecover = signal(false);
-  // Filtro por lista de origen (lastKnownPlaylist): permite recuperar una lista borrada entera.
-  protected readonly recoverListFilter = signal<string>('');
-  protected readonly recoverLists = computed(() => {
-    const counts = new Map<string, number>();
-    for (const r of this.recoverable()) {
-      counts.set(r.lastKnownPlaylist, (counts.get(r.lastKnownPlaylist) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .map(([name, n]) => ({ name, n }))
-      .sort((a, b) => b.n - a.n);
-  });
-  protected readonly recoverableFiltered = computed(() => {
-    const f = this.recoverListFilter();
-    return f ? this.recoverable().filter((r) => r.lastKnownPlaylist === f) : this.recoverable();
-  });
-  protected readonly allRecoverSelected = computed(() => {
-    const list = this.recoverableFiltered();
-    if (list.length === 0) return false;
-    const sel = this.recoverSel();
-    return list.every((r) => sel.has(r.videoId));
+  // Primero las canciones que están en más de una playlist.
+  protected readonly listItemsSorted = computed(() => {
+    const m = this.locMap();
+    return [...this.listItems()].sort(
+      (a, b) => (m[b.videoId]?.length ?? 0) - (m[a.videoId]?.length ?? 0),
+    );
   });
 
   // Modo "por canción" — filtrado en vivo (debounce, sin Enter)
@@ -193,27 +112,27 @@ export class CrossDuplicates {
   protected readonly results = signal<SongSearchResult[]>([]);
   protected readonly searching = signal(false);
   private readonly searchSubject = new Subject<void>();
+  protected readonly resultsDeduped = computed(() => {
+    const seen = new Set<string>();
+    return [...this.results()]
+      .sort((a, b) => (b.appearsInCount ?? 0) - (a.appearsInCount ?? 0))
+      .filter((r) => {
+        if (seen.has(r.videoId)) return false;
+        seen.add(r.videoId);
+        return true;
+      });
+  });
 
-  // Borradores acumulados por canción (videoId → SongDraft). Se guardan todos juntos
-  // con la barra global; ninguna edición dispara API hasta entonces.
-  protected readonly drafts = signal<Record<string, SongDraft>>({});
-  protected readonly draftCount = computed(() => Object.keys(this.drafts()).length);
-  protected readonly savingAll = signal(false);
-
-  // Editor de asignación (compartido, modal) — solo multi-selección.
+  // Editor de asignación (modal compartido por los tres modos con tarjetas).
   protected readonly editingVideoId = signal<string | null>(null);
   protected readonly editingTitle = signal<string>('');
-  protected readonly selection = signal<ReadonlySet<string>>(new Set());
-  // Estado original del servidor para el apply del modal (baseline del draft).
-  private readonly editorBaseline = signal<string[]>([]);
-  protected readonly editorLoading = signal(false);
-  // Listas ordenadas para el modal: primero donde ya está, luego el resto (alfabético).
-  protected readonly editorPlaylists = signal<Playlist[]>([]);
 
-  private readonly pendingSvc = inject(PendingService);
+  protected readonly busy = computed(() => this.loading() || (this.listTools()?.busy() ?? false));
+  // El rótulo dice qué está corriendo: escanear, buscar, limpiar o clasificar.
+  protected readonly busyKey = computed(() => this.listTools()?.busy() ? this.listTools()!.busyKey() : 'cross.busy_title');
 
   constructor() {
-    // Cargas iniciales solo con sesión; al desconectar (401/logout) se limpia todo
+    // Cargas iniciales solo con sesión; al desconectar se limpia todo
     // — regla: sin sesión no se muestra ni caché.
     effect(() => {
       if (this.connected()) {
@@ -227,11 +146,9 @@ export class CrossDuplicates {
       }
     });
 
-    this.searchSubject
-      .pipe(debounceTime(400))
-      .subscribe(() => this.search());
+    this.searchSubject.pipe(debounceTime(400)).subscribe(() => this.search());
 
-    // Refrescar el modo activo cuando el panel global sube/descarta cambios.
+    // Refrescar el modo activo cuando el panel global sube o descarta cambios.
     effect(() => {
       if (this.pendingSvc.mutations() === 0) return;
       untracked(() => {
@@ -250,17 +167,14 @@ export class CrossDuplicates {
       });
     });
 
-    // Deep-link desde el command palette → modo "por canción" pre-buscado (?q=videoId).
-    // Funciona incluso cuando ya se está en /organizar porque el query param cambia la URL.
+    // Deep-link desde el command palette → modo "por canción" pre-buscado.
+    // Funciona estando ya en /organizar porque el query param cambia la URL.
     effect(() => {
       const navQ = this.q();
       if (!navQ) return;
       untracked(() => {
-        if (looksLikeVideoId(navQ)) {
-          this.idInput.set(navQ);
-        } else {
-          this.nameInput.set(navQ);
-        }
+        if (looksLikeVideoId(navQ)) this.idInput.set(navQ);
+        else this.nameInput.set(navQ);
         this.mode.set('bySong');
         setTimeout(() => {
           this.search();
@@ -284,70 +198,7 @@ export class CrossDuplicates {
     this.mode.set(m);
     this.closeEditor();
     this.error.set(null);
-    if (m === 'recover' && !this.recoverLoaded()) this.loadRecoverable();
-  }
-
-  loadRecoverable(): void {
-    this.loadingRecover.set(true);
-    this.error.set(null);
-    this.recoverSel.set(new Set());
-    this.api.recoverableSongs()
-      .pipe(delay(0), finalize(() => this.loadingRecover.set(false)))   // delay(0): deja pintar el skeleton
-      .subscribe({
-        next: (r) => {
-          this.recoverable.set(r);
-          this.recoverLoaded.set(true);
-        },
-        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
-      });
-  }
-
-  toggleRecoverSel(videoId: string): void {
-    const n = new Set(this.recoverSel());
-    if (n.has(videoId)) n.delete(videoId);
-    else n.add(videoId);
-    this.recoverSel.set(n);
-  }
-
-  // Selecciona/deselecciona lo VISIBLE (respeta el filtro por lista de origen).
-  toggleSelectAllRecover(): void {
-    const visible = this.recoverableFiltered().map((r) => r.videoId);
-    const sel = new Set(this.recoverSel());
-    if (this.allRecoverSelected()) visible.forEach((id) => sel.delete(id));
-    else visible.forEach((id) => sel.add(id));
-    this.recoverSel.set(sel);
-  }
-
-  // Encola la recuperación: crea la lista (si aplica) y deja un pendiente de subida
-  // reanudable — la subida real (50u por canción) se hace desde el panel global.
-  stageRecovery(): void {
-    const sel = this.recoverSel();
-    if (sel.size === 0 || this.stagingRecover()) return;
-    const targetId = this.recoverTargetId();
-    const newTitle = this.recoverNewTitle().trim();
-    if (!targetId && !newTitle) {
-      this.error.set(this.translate.instant('cross.recover_need_target'));
-      return;
-    }
-    const n = sel.size;
-    if (!confirm(this.translate.instant('cross.recover_confirm', { n }))) return;
-    this.stagingRecover.set(true);
-    this.error.set(null);
-    const songs = this.recoverable()
-      .filter((r) => sel.has(r.videoId))
-      .map((r) => ({ videoId: r.videoId, title: r.title, channelTitle: r.channelTitle, thumbnailUrl: r.thumbnailUrl }));
-    this.api.recoverSongs({
-      targetPlaylistId: targetId || null,
-      newPlaylistTitle: targetId ? null : newTitle,
-      songs,
-    }).pipe(finalize(() => this.stagingRecover.set(false))).subscribe({
-      next: () => {
-        this.recoverSel.set(new Set());
-        this.recoverNewTitle.set('');
-        this.pendingSvc.refresh();   // queda en el chip de pendientes; el usuario sube cuando quiera
-      },
-      error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
-    });
+    if (m === 'recover') setTimeout(() => this.recoverTab()?.ensureLoaded(), 0);
   }
 
   private loadPlaylists(): void {
@@ -370,6 +221,10 @@ export class CrossDuplicates {
     return n > 0 ? `${base} — ${this.translate.instant('cross.dups_in_list', { n })}` : base;
   }
 
+  playlistIdsOf(g: { playlists: { playlistId: string }[] }): string[] {
+    return g.playlists.map((p) => p.playlistId);
+  }
+
   // ── Modo repetidas ──
   scan(refresh = false): void {
     this.loading.set(true);
@@ -389,10 +244,7 @@ export class CrossDuplicates {
   // ── Modo por lista ──
   pickList(id: string): void {
     this.listId.set(id);
-    this.duplicates.set(null);
-    this.classification.set(null);
-    this.stagedMsg.set(null);
-    this.aiError.set(null);
+    this.listTools()?.reset();
     this.closeEditor();
     this.listItems.set([]);
     if (!id) return;
@@ -415,93 +267,11 @@ export class CrossDuplicates {
       });
   }
 
-  // ── Herramientas de lista: repetidas internas + IA ──
-  loadDuplicates(): void {
-    if (!this.listId()) return;
-    this.loadingDup.set(true);
-    this.api.findDuplicates(this.listId())
-      .pipe(finalize(() => this.loadingDup.set(false)))
-      .subscribe({
-        next: (r) => {
-          this.duplicates.set(r);
-          this.api.refreshQuota();
-          this.pickList(this.listId());
-        },
-        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
-      });
+  reloadList(): void {
+    this.pickList(this.listId());
   }
 
-  cleanDuplicates(): void {
-    if (!this.listId()) return;
-    if (!confirm(this.translate.instant('detail.confirm_remove'))) return;
-    this.cleaning.set(true);
-    this.api.removeDuplicates(this.listId(), this.strategy())
-      .pipe(finalize(() => this.cleaning.set(false)))
-      .subscribe({
-        next: (r) => {
-          alert(this.translate.instant('detail.alert_removed', { removed: r.removed, kept: r.kept }));
-          this.pickList(this.listId());
-          this.loadDuplicates();
-        },
-        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
-      });
-  }
-
-  private stageRemoval(ids: string[], songTitle: string): void {
-    if (ids.length === 0) return;
-    const msg = this.translate.instant('detail.dup_confirm', { n: ids.length, title: songTitle });
-    if (!confirm(msg)) return;
-    this.api.removeItemsFromPlaylist(this.listId(), ids).subscribe((r) => {
-      this.api.refreshQuota();
-      this.stagedMsg.set(this.translate.instant('detail.dup_staged', { n: r.staged }));
-      // Poda local de la vista de repetidas: NO se re-lee de YouTube (la remoción
-      // todavía no está allá; releer restauraría la caché y "desharía" lo quitado).
-      const dup = this.duplicates();
-      if (dup) {
-        const removed = new Set(ids);
-        const groups = dup.groups
-          .map((g) => ({ ...g, items: g.items.filter((i) => !removed.has(i.playlistItemId)) }))
-          .filter((g) => g.items.length > 1);
-        this.duplicates.set({
-          ...dup,
-          groups,
-          duplicateCount: groups.reduce((acc, g) => acc + g.items.length - 1, 0),
-          totalItems: dup.totalItems - removed.size,
-        });
-      }
-      this.pickList(this.listId());
-      this.pendingSvc.refresh();
-    });
-  }
-
-  removeCopy(it: { playlistItemId: string; title: string }): void {
-    this.stageRemoval([it.playlistItemId], it.title);
-  }
-
-  keepThis(items: { playlistItemId: string; title: string }[], keepId: string): void {
-    const toRemove = items.filter((i) => i.playlistItemId !== keepId);
-    this.stageRemoval(toRemove.map((i) => i.playlistItemId), items[0]?.title ?? '');
-  }
-
-  classify(): void {
-    if (!this.listId()) return;
-    this.classifying.set(true);
-    this.aiError.set(null);
-    // El 503 (proveedor de IA sin configurar) no lo cubre el helper: es un fallo
-    // del clasificador, no de YouTube.
-    this.api.classify(this.listId(), this.aiMode())
-      .pipe(finalize(() => this.classifying.set(false)))
-      .subscribe({
-        next: (r) => this.classification.set(r),
-        error: (e) => this.aiError.set(
-          e?.status === 503
-            ? this.translate.instant('detail.ai_config_error')
-            : this.translate.instant('detail.ai_generic_error'),
-        ),
-      });
-  }
-
-  // ── Modo por canción: filtros en vivo ──
+  // ── Modo por canción ──
   onFilterChange(): void {
     this.searchSubject.next();
   }
@@ -525,164 +295,47 @@ export class CrossDuplicates {
     });
   }
 
-  // ── Borrador local: helpers de estado por tarjeta ──
-  // Marca solo cuando el draft difiere de lo que la tarjeta muestra HOY: tras subir
-  // desde el panel global el baseline queda obsoleto y no hay nada que señalar.
-  hasDraftChanges(videoId: string, currentIds: string[] | undefined): boolean {
-    const d = this.drafts()[videoId];
-    if (!d) return false;
-    const cur = currentIds ?? [];
-    return d.desired.length !== cur.length || !d.desired.every((id) => cur.includes(id));
-  }
-
-  // Un tag renderizado desde ids actuales está "marcado para quitar" si hay draft
-  // y ya no figura en desired.
-  isStagedRemoved(videoId: string, playlistId: string): boolean {
-    const d = this.drafts()[videoId];
-    return !!d && !d.desired.includes(playlistId);
-  }
-
-  // Listas agregadas por el modal que aún no existen en el servidor (desired − baseline).
-  stagedAdditionRefs(videoId: string): { id: string; title: string }[] {
-    const d = this.drafts()[videoId];
-    if (!d) return [];
-    return this.refsFor(d.desired.filter((id) => !d.baseline.includes(id)));
-  }
-
-  // Crea/actualiza el draft; si desired vuelve a igualar baseline, lo elimina.
-  private upsertDraft(videoId: string, title: string, baseline: string[], desired: string[]): void {
-    const all = { ...this.drafts() };
-    const same = baseline.length === desired.length && baseline.every((id) => desired.includes(id));
-    if (same) delete all[videoId];
-    else all[videoId] = { title, baseline, desired };
-    this.drafts.set(all);
-  }
-
-  toggleRemoval(videoId: string, title: string, currentIds: string[], playlistId: string): void {
-    const existing = this.drafts()[videoId];
-    const baseline = existing?.baseline ?? [...currentIds];
-    const desired = new Set(existing?.desired ?? baseline);
-    if (desired.has(playlistId)) desired.delete(playlistId);
-    else desired.add(playlistId);
-    this.upsertDraft(videoId, title, baseline, [...desired]);
-  }
-
-  discardCard(videoId: string): void {
-    const all = { ...this.drafts() };
-    delete all[videoId];
-    this.drafts.set(all);
-  }
-
-  // ── Guardar todo: única acción que manda los drafts a la cola de pendientes ──
+  // ── Borradores ──
   async saveAll(): Promise<void> {
-    if (this.draftCount() === 0 || this.savingAll()) return;
-    if (!confirm(this.translate.instant('cross.draft_save_confirm', { n: this.draftCount() }))) return;
-    // Solo encola: la subida se dispara desde el chip de pendientes cuando el usuario quiera.
-    await this.saveAllCore();
-  }
-
-  // Cuerpo sin confirm ni apertura de panel: lo reutiliza el guard de salida.
-  // Va quitando del record cada draft ya enviado para que un fallo a mitad no
-  // duplique al reintentar.
-  async saveAllCore(): Promise<boolean> {
-    const entries = Object.entries(this.drafts());
-    if (!entries.length) return true;
-    this.savingAll.set(true);
-    this.error.set(null);
-    let allOk = true;
-    try {
-      for (const [videoId, d] of entries) {
-        await firstValueFrom(this.api.assignSong({
-          videoId,
-          title: d.title,
-          channelTitle: null,
-          thumbnailUrl: null,
-          desiredPlaylistIds: d.desired,
-        }));
-        this.discardCard(videoId);
-      }
-    } catch (e) {
-      this.error.set(this.apiError.message(e, 'cross.assign_error'));
-      allOk = false;
-    } finally {
-      this.savingAll.set(false);
-      this.pendingSvc.refresh();
-      this.refreshCurrentMode();
-      this.loadDupCounts();
-    }
-    return allOk;
+    if (this.drafts.count() === 0 || this.drafts.saving()) return;
+    if (!confirm(this.translate.instant('cross.draft_save_confirm', { n: this.drafts.count() }))) return;
+    // Solo encola: la subida se dispara desde el chip de pendientes.
+    await this.saveDrafts();
   }
 
   discardAllDrafts(): void {
-    if (!confirm(this.translate.instant('cross.draft_discard_confirm', { n: this.draftCount() }))) return;
-    this.drafts.set({});
+    if (!confirm(this.translate.instant('cross.draft_discard_confirm', { n: this.drafts.count() }))) return;
+    this.drafts.discardAll();
   }
 
-  // Guard de salida: con drafts pendientes pregunta una vez; OK = guarda y sale.
+  private async saveDrafts(): Promise<boolean> {
+    const ok = await this.drafts.saveAll();
+    if (this.drafts.error()) this.error.set(this.drafts.error());
+    this.refreshCurrentMode();
+    this.loadDupCounts();
+    return ok;
+  }
+
+  // Guard de salida: con borradores pendientes pregunta una vez; OK = guarda y sale.
   async canLeave(): Promise<boolean> {
-    if (this.draftCount() === 0) return true;
-    const save = confirm(this.translate.instant('cross.draft_leave_confirm', { n: this.draftCount() }));
-    if (!save) return false;
-    return await this.saveAllCore();
+    if (this.drafts.count() === 0) return true;
+    if (!confirm(this.translate.instant('cross.draft_leave_confirm', { n: this.drafts.count() }))) return false;
+    return await this.saveDrafts();
   }
 
   @HostListener('window:beforeunload', ['$event'])
   onBeforeUnload(e: BeforeUnloadEvent): void {
-    if (this.draftCount() > 0) e.preventDefault();
+    if (this.drafts.count() > 0) e.preventDefault();
   }
 
-  // ── Editor de asignación (modal, solo para AGREGAR a listas nuevas) ──
-  openEditor(row: SongRow): void {
-    this.editingVideoId.set(row.videoId);
-    this.editingTitle.set(row.title);
-    this.editorLoading.set(true);
-    this.api.songLocations(row.videoId)
-      .pipe(finalize(() => this.editorLoading.set(false)))
-      .subscribe({
-        next: (locs) => {
-          // Con draft previo la selección arranca del draft (no del servidor) y el
-          // baseline original se conserva para no perder las adiciones acumuladas.
-          const existing = this.drafts()[row.videoId];
-          this.editorBaseline.set(existing?.baseline ?? locs);
-          const sel = new Set(existing?.desired ?? locs);
-          this.selection.set(sel);
-          // Primero las listas donde ya está; el resto alfabético (orden del backend).
-          this.editorPlaylists.set(
-            [...this.allPlaylists()].sort(
-              (a, b) => (sel.has(b.id) ? 1 : 0) - (sel.has(a.id) ? 1 : 0),
-            ),
-          );
-        },
-        // Sin ubicaciones el modal abre igual, con todo desmarcado.
-        error: () => {
-          this.editorBaseline.set([]);
-          this.selection.set(new Set());
-          this.editorPlaylists.set([...this.allPlaylists()]);
-        },
-      });
+  // ── Editor de asignación ──
+  openEditor(videoId: string, title: string): void {
+    this.editingVideoId.set(videoId);
+    this.editingTitle.set(title);
   }
 
   closeEditor(): void {
     this.editingVideoId.set(null);
-  }
-
-  isChecked(pid: string): boolean {
-    return this.selection().has(pid);
-  }
-
-  toggle(pid: string): void {
-    const n = new Set(this.selection());
-    if (n.has(pid)) n.delete(pid);
-    else n.add(pid);
-    this.selection.set(n);
-  }
-
-  // Aplicar del modal = solo actualiza el borrador local y cierra; sin API.
-  apply(): void {
-    const vid = this.editingVideoId();
-    if (!vid) return;
-    this.upsertDraft(vid, this.editingTitle(), this.editorBaseline(), [...this.selection()]);
-    this.closeEditor();
   }
 
   private refreshCurrentMode(): void {
@@ -690,7 +343,7 @@ export class CrossDuplicates {
     if (m === 'repeated' && this.report()) this.scan(false);
     else if (m === 'byList' && this.listId()) this.pickList(this.listId());
     else if (m === 'bySong' && this.results().length) this.search();
-    else if (m === 'recover' && this.recoverLoaded()) this.loadRecoverable();
+    else if (m === 'recover') this.recoverTab()?.load();
   }
 
   // Al perder la sesión: sin datos en pantalla (ni de caché) y sin borradores.
@@ -701,20 +354,13 @@ export class CrossDuplicates {
     this.listId.set('');
     this.listItems.set([]);
     this.locMap.set({});
-    this.duplicates.set(null);
-    this.classification.set(null);
+    this.listTools()?.reset();
     this.results.set([]);
     this.nameInput.set('');
     this.idInput.set('');
-    this.recoverable.set([]);
-    this.recoverLoaded.set(false);
-    this.recoverSel.set(new Set());
-    this.recoverListFilter.set('');
-    this.recoverTargetId.set('');
-    this.recoverNewTitle.set('');
-    this.drafts.set({});
+    this.recoverTab()?.clear();
+    this.drafts.discardAll();
     this.closeEditor();
     this.error.set(null);
   }
-
 }

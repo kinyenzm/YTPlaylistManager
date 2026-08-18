@@ -1,5 +1,5 @@
 <div class="card">
-  <div class="header">
+  <div class="row row--between card__header">
     <h2>{{ 'cache.title' | translate }}</h2>
     <div class="row">
       <button (click)="refreshCache()" class="secondary">{{ 'cache.refresh' | translate }}</button>
@@ -10,17 +10,7 @@
   <p class="muted">{{ 'cache.intro' | translate }}</p>
 
   @if (isLoading()) {
-    <div class="grid" style="margin-bottom:16px">
-      @for (_ of [1,2,3,4]; track $index) {
-        <div class="stat-card">
-          <span class="skeleton" style="width:36px;height:36px;border-radius:6px;flex-shrink:0"></span>
-          <div style="flex:1;display:flex;flex-direction:column;gap:6px">
-            <span class="skeleton skeleton--text" style="width:60%"></span>
-            <span class="skeleton skeleton--title" style="width:40%"></span>
-          </div>
-        </div>
-      }
-    </div>
+    <app-skeleton-list variant="stat" [count]="4" />
   }
   @if (error()) {
     <p class="danger">{{ error() }}</p>
@@ -54,6 +44,13 @@
       class="tab-btn"
     >
       {{ 'cache.tab_activity' | translate:{ count: activityLog().length } }}
+    </button>
+    <button
+      (click)="switchTab('history')"
+      [class.active]="activeTab() === 'history'"
+      class="tab-btn"
+    >
+      {{ 'cache.tab_history' | translate }}
     </button>
   </div>
 
@@ -189,219 +186,9 @@
     </div>
   }
 
-  @if (selectedSongHistory()) {
-    <div class="modal-overlay" (click)="closeHistoryModal()">
-      <div class="modal-content" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>{{ 'cache.history_title' | translate }}</h3>
-          <button class="close-btn" (click)="closeHistoryModal()">✕</button>
-        </div>
-
-        <div class="modal-body">
-          <p>
-            <strong>{{ 'cache.video_id_label' | translate }}</strong>
-            <code>{{ selectedSongHistory()!.videoId }}</code>
-          </p>
-          <p>
-            <strong>{{ 'cache.song_label' | translate }}</strong>
-            {{ selectedSongHistory()!.songTitle }}
-          </p>
-
-          @if (selectedSongHistory()!.events.length > 0) {
-            <div class="timeline">
-              @for (evt of selectedSongHistory()!.events; track $index) {
-                <div class="timeline-item">
-                  <div class="dot"></div>
-                  <div>
-                    <p class="accent"><strong>{{ evt.eventType }}</strong></p>
-                    <p class="muted">
-                      {{ evt.playlistTitle }}
-                      @if (evt.position >= 0) {
-                        <span>#{{ evt.position }}</span>
-                      }
-                    </p>
-                    <p class="muted">{{ evt.date | date: 'medium' }}</p>
-                    @if (evt.reason) {
-                      <p class="muted"><em>{{ evt.reason }}</em></p>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-          } @else {
-            <p class="muted">{{ 'cache.no_events' | translate }}</p>
-          }
-        </div>
-      </div>
+  @if (activeTab() === 'history') {
+    <div class="tab-content">
+      <app-song-history />
     </div>
   }
 </div>
-
-<style>
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-    gap: 12px;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
-  }
-
-  .tab-btn {
-    background: none;
-    border: none;
-    padding: 12px 16px;
-    cursor: pointer;
-    color: var(--muted);
-    border-bottom: 2px solid transparent;
-    transition: color 0.2s;
-  }
-
-  .tab-btn.active {
-    color: var(--accent2);
-    border-bottom-color: var(--accent2);
-  }
-
-  .tab-content {
-    animation: fadeIn 0.2s;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-  }
-
-  .stat-card {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-  }
-
-  .stat-card > div:first-child {
-    font-size: 2em;
-  }
-
-  .stat-card p {
-    margin: 2px 0;
-  }
-
-  .stat-card .large {
-    font-size: 1.6em;
-    font-weight: 600;
-    color: var(--accent2);
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9em;
-  }
-
-  thead {
-    background: var(--panel);
-    border-bottom: 1px solid var(--border);
-  }
-
-  th,
-  td {
-    text-align: left;
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  th {
-    font-weight: 600;
-    color: var(--muted);
-  }
-
-  code {
-    font-size: 0.8em;
-  }
-
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 17, 21, 0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h3 {
-    margin: 0;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text);
-    cursor: pointer;
-    font-size: 1.2em;
-  }
-
-  .modal-body {
-    padding: 16px;
-  }
-
-  .timeline {
-    margin-top: 16px;
-  }
-
-  .timeline-item {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
-    position: relative;
-  }
-
-  .dot {
-    width: 12px;
-    height: 12px;
-    background: var(--accent2);
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 3px;
-  }
-
-  .accent {
-    color: var(--accent2);
-  }
-</style>

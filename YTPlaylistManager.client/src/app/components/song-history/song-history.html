@@ -1,0 +1,72 @@
+<p class="muted">{{ 'cache.history_intro' | translate }}</p>
+
+<div class="row toolbar cross-org__actions-row">
+  <input type="text" class="flex-fill" [ngModel]="query()" (ngModelChange)="onQueryChange($event)"
+    (keyup.enter)="search()" [placeholder]="'cache.history_search_ph' | translate" />
+</div>
+
+@if (error(); as e) {
+  <app-empty-state [danger]="true">{{ e }}</app-empty-state>
+}
+
+@if (searching()) {
+  <app-skeleton-list [count]="4" />
+} @else if (results().length > 0) {
+  <div class="cross-org__song-list">
+    @for (r of results(); track r.videoId) {
+      <div class="card card--selectable" (click)="open(r.videoId)">
+        <div class="row cross-org__song-row">
+          <img [src]="thumb(r.videoId)" class="thumb" alt="" />
+          <div class="cross-org__song-body">
+            <div>{{ r.title }}</div>
+            <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{ r.channelTitle }}</div>
+            <code class="muted">{{ r.videoId }}</code>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+} @else if (searched()) {
+  <app-empty-state>{{ 'cross.no_results' | translate }}</app-empty-state>
+}
+
+@if (loadingHistory()) {
+  <app-skeleton-list variant="option" [count]="3" />
+}
+
+@if (history(); as h) {
+  <div class="card">
+    <div class="row row--between">
+      <h4 class="modal__title">{{ 'cache.history_title' | translate }}</h4>
+      <button class="secondary pending__close" (click)="clear()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <p>
+      <strong>{{ 'cache.video_id_label' | translate }}</strong>
+      <code>{{ h.videoId }}</code>
+    </p>
+    <p><strong>{{ 'cache.song_label' | translate }}</strong> {{ h.songTitle }}</p>
+
+    @if (h.events.length > 0) {
+      <div class="timeline">
+        @for (evt of h.events; track $index) {
+          <div class="timeline__item">
+            <div class="timeline__dot"></div>
+            <div>
+              <p class="accent timeline__event"><strong>{{ evt.eventType }}</strong></p>
+              <p class="muted timeline__event">
+                {{ evt.playlistTitle }}
+                @if (evt.position >= 0) { <span>#{{ evt.position }}</span> }
+              </p>
+              <p class="muted timeline__event">{{ evt.date | date: 'medium' }}</p>
+              @if (evt.reason) {
+                <p class="muted timeline__event"><em>{{ evt.reason }}</em></p>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <p class="muted">{{ 'cache.no_events' | translate }}</p>
+    }
+  </div>
+}

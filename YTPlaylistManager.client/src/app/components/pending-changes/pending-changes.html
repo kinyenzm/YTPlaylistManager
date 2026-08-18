@@ -7,8 +7,7 @@
 }
 
 @if (svc.open()) {
-  <div class="modal-backdrop" (click)="close()">
-    <div class="modal modal--wide" (click)="$event.stopPropagation()">
+  <app-modal size="wide" (dismiss)="close()">
       <div class="row row--between">
         <h3 class="modal__title"><i class="fa-solid fa-cloud-arrow-up"></i> {{ 'pending.title' | translate }}</h3>
         <button class="secondary pending__close" (click)="close()"><i class="fa-solid fa-xmark"></i></button>
@@ -23,7 +22,7 @@
       }
 
       @if (svc.count() === 0) {
-        <div class="card pending__note">{{ 'playlists.pending_empty' | translate }}</div>
+        <app-empty-state>{{ 'playlists.pending_empty' | translate }}</app-empty-state>
       } @else {
         <div class="row row--between row--wrap row--tight pending__note">
           <span class="muted">{{ 'pending.total' | translate:{ q: svc.totalQuota() } }}</span>
@@ -129,16 +128,9 @@
       <div class="row row--modal-actions">
         <button class="secondary" (click)="close()">{{ 'common.close' | translate }}</button>
       </div>
-    </div>
-  </div>
+  </app-modal>
 }
 
 @if (busyId() !== null) {
-  <div class="busy-overlay">
-    <div class="busy-card">
-      <h4>{{ 'playlists.merge_busy_title' | translate }}</h4>
-      <div class="progress indeterminate"><div class="bar"></div></div>
-      <p class="muted">{{ 'playlists.merge_busy_desc' | translate }}</p>
-    </div>
-  </div>
+  <app-busy-overlay titleKey="playlists.merge_busy_title" descKey="playlists.merge_busy_desc" />
 }

@@ -4,12 +4,16 @@ import { TranslateModule } from '@ngx-translate/core';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
-import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, SongMovementLog, ActivityItem } from '../../models/models';
+import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, ActivityItem } from '../../models/models';
+import { SkeletonList } from '../ui/skeleton-list';
+import { SongHistory } from '../song-history/song-history';
+
+type Tab = 'dashboard' | 'archived' | 'reviews' | 'activity' | 'history';
 
 @Component({
   selector: 'app-cache-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, TranslateModule],
+  imports: [DatePipe, TranslateModule, SkeletonList, SongHistory],
   templateUrl: './cache-explorer.html',
 })
 export class CacheExplorer implements OnInit {
@@ -19,13 +23,12 @@ export class CacheExplorer implements OnInit {
   cacheStatus = signal<CacheStatus | null>(null);
   archivedPlaylists = signal<PlaylistArchivedInfo[]>([]);
   mergeReviews = signal<MergeReviewSummary[]>([]);
-  selectedSongHistory = signal<SongMovementLog | null>(null);
   activityLog = signal<ActivityItem[]>([]);
 
   isLoading = signal(false);
   error = signal<string | null>(null);
 
-  activeTab = signal<'dashboard' | 'archived' | 'reviews' | 'activity'>('dashboard');
+  activeTab = signal<Tab>('dashboard');
 
   // Deep-link: el "Ver más" del panel flotante navega con ?tab=activity.
   readonly tab = input<string>();
@@ -70,18 +73,7 @@ export class CacheExplorer implements OnInit {
       });
   }
 
-  viewSongHistory(videoId: string): void {
-    this.api.getSongHistory(videoId).subscribe({
-      next: (history) => this.selectedSongHistory.set(history),
-      error: (e) => this.error.set(this.apiError.message(e, 'cache.error_history', { msg: (e as Error)?.message })),
-    });
-  }
-
-  closeHistoryModal(): void {
-    this.selectedSongHistory.set(null);
-  }
-
-  switchTab(tab: 'dashboard' | 'archived' | 'reviews' | 'activity'): void {
+  switchTab(tab: Tab): void {
     this.activeTab.set(tab);
   }
 

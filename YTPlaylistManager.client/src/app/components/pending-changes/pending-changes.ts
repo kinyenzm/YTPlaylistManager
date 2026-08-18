@@ -6,6 +6,9 @@ import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import { PendingSongMove, PendingUpload } from '../../models/models';
+import { BusyOverlay } from '../ui/busy-overlay';
+import { EmptyState } from '../ui/empty-state';
+import { Modal } from '../ui/modal';
 
 /**
  * Panel global de cambios pendientes: chip flotante + modal superpuesto
@@ -15,7 +18,7 @@ import { PendingSongMove, PendingUpload } from '../../models/models';
 @Component({
   selector: 'app-pending-changes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslateModule],
+  imports: [TranslateModule, BusyOverlay, EmptyState, Modal],
   templateUrl: './pending-changes.html',
 })
 export class PendingChanges implements OnDestroy {
