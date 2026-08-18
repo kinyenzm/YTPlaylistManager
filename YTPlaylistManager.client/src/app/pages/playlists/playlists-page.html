@@ -16,11 +16,16 @@
   <app-empty-state>{{ 'playlists.not_connected' | translate }}</app-empty-state>
 }
 
-@if (loading()) {
-  <app-skeleton-list variant="card" [count]="6" />
+<!-- Actualizar todo también bloquea la rejilla: las tarjetas viejas no deben
+     quedar clicables mientras la caché se está reescribiendo. -->
+@if (loading() || refreshing()) {
+  <app-skeleton-list variant="card" [count]="playlistsSorted().length || 6" />
 }
 
 @if (error(); as e) {
+  <app-empty-state [danger]="true">{{ e }}</app-empty-state>
+}
+@if (refreshError(); as e) {
   <app-empty-state [danger]="true">{{ e }}</app-empty-state>
 }
 
@@ -46,6 +51,7 @@
   </div>
 }
 
+@if (!loading() && !refreshing()) {
 <div class="grid">
   @for (p of playlistsSorted(); track p.id) {
     <div class="card"
@@ -95,6 +101,7 @@
     </div>
   }
 </div>
+}
 
 @if (refreshConfirmOpen()) {
   <app-modal (dismiss)="cancelRefresh()">

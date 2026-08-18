@@ -12,7 +12,8 @@
     },
     "lang": {
       "label": "Language"
-    }
+    },
+    "refreshing_all": "Refreshing all playlists…"
   },
   "auth": {
     "session_expired_toast": "Your Google session expired. Please reconnect."

@@ -7,18 +7,12 @@ import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
+import { RefreshAllService } from '../../services/refresh-all.service';
 import { Playlist, MergeResult, MergePreview } from '../../models/models';
 import { BusyOverlay } from '../../components/ui/busy-overlay';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Modal } from '../../components/ui/modal';
 import { SkeletonList } from '../../components/ui/skeleton-list';
-
-interface RefreshAllResult {
-  playlistsRefreshed: number;
-  itemsRefreshed: number;
-  playlistsSkipped: number;
-  quotaUsed: number;
-}
 
 @Component({
   selector: 'app-playlists-page',
@@ -31,6 +25,7 @@ export class PlaylistsPage implements OnInit {
   private readonly apiError = inject(ApiErrorService);
   private readonly translate = inject(TranslateService);
   private readonly pending = inject(PendingService);
+  private readonly refreshSvc = inject(RefreshAllService);
   private readonly auth = inject(AuthService);
 
   protected readonly authChecked = this.auth.checked;
@@ -41,6 +36,12 @@ export class PlaylistsPage implements OnInit {
     // (las uniones subidas borran listas origen).
     effect(() => {
       if (this.pending.mutations() === 0) return;
+      untracked(() => this.load());
+    });
+
+    // El refresco global terminó (quizás mientras se navegaba): releer de la caché nueva.
+    effect(() => {
+      if (this.refreshSvc.result() === null) return;
       untracked(() => this.load());
     });
 
@@ -110,8 +111,9 @@ export class PlaylistsPage implements OnInit {
   }
 
   protected readonly refreshConfirmOpen = signal(false);
-  protected readonly refreshing = signal(false);
-  protected readonly refreshResult = signal<RefreshAllResult | null>(null);
+  protected readonly refreshing = this.refreshSvc.running;
+  protected readonly refreshResult = this.refreshSvc.result;
+  protected readonly refreshError = this.refreshSvc.errorMsg;
 
   protected readonly refreshEstimate = computed<{ playlists: number; quota: number }>(() => {
     const list = this.activePlaylists();
@@ -219,21 +221,11 @@ export class PlaylistsPage implements OnInit {
 
   confirmRefresh(): void {
     this.refreshConfirmOpen.set(false);
-    this.refreshing.set(true);
     this.error.set(null);
-    this.api.refreshAll()
-      .pipe(finalize(() => this.refreshing.set(false)))
-      .subscribe({
-        next: (r) => {
-          this.refreshResult.set(r);
-          this.api.refreshQuota();
-          this.load();
-        },
-        error: (e) => this.error.set(this.apiError.message(e, 'playlists.refresh_all_error')),
-      });
+    this.refreshSvc.start();
   }
 
   dismissRefreshResult(): void {
-    this.refreshResult.set(null);
+    this.refreshSvc.dismiss();
   }
 }

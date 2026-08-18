@@ -12,7 +12,8 @@
     },
     "lang": {
       "label": "Idioma"
-    }
+    },
+    "refreshing_all": "Actualizando todas las listas…"
   },
   "auth": {
     "session_expired_toast": "Tu sesión de Google expiró. Conectate de nuevo."

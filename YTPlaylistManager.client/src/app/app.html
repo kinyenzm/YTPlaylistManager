@@ -41,5 +41,11 @@
 <main>
   <router-outlet />
 </main>
+@if (refreshingAll()) {
+  <div class="refresh-chip" role="status">
+    <i class="fa-solid fa-arrows-rotate fa-spin"></i>
+    {{ 'app.refreshing_all' | translate }}
+  </div>
+}
 <app-pending-changes />
 <app-command-palette />

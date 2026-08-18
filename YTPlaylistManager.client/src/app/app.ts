@@ -11,6 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
 import { AuthService } from './services/auth.service';
 import { LangService } from './services/lang.service';
+import { RefreshAllService } from './services/refresh-all.service';
 import { LangSwitcher } from './components/lang-switcher/lang-switcher';
 import { PendingChanges } from './components/pending-changes/pending-changes';
 import { CommandPalette } from './components/command-palette/command-palette';
@@ -39,6 +40,8 @@ export class App implements OnInit {
   protected readonly auth = inject(AuthService);
 
   protected readonly loginUrl = this.api.loginUrl();
+  // Aviso global de "Actualizar todo": visible en cualquier página mientras corre.
+  protected readonly refreshingAll = inject(RefreshAllService).running;
   protected readonly quota = this.api.quota;   // cuota de YouTube restante hoy
 
   // Idioma actual → rutas en es/en (ambas resuelven; ver app.routes.ts).

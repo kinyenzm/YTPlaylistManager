@@ -742,6 +742,26 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cross-org__busy-desc      { margin: 12px 0 0; }
 .cross-org__select         { flex: 1; }
 
+/* ── Aviso global de Actualizar todo ── */
+.refresh-chip {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+}
+.refresh-chip i { color: var(--accent2); }
+
 /* ── Historial: rejilla de contadores, pestañas y línea de tiempo ── */
 .grid--stats { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 16px; }
 .tab-content { animation: fadeIn 0.2s; }

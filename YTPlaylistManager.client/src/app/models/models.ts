@@ -171,6 +171,14 @@ export interface SongMoveBulkResult {
   remainingMoves: number;
 }
 
+// Resumen de "Actualizar todo" (recarga completa de listas e items).
+export interface RefreshAllResult {
+  playlistsRefreshed: number;
+  itemsRefreshed: number;
+  playlistsSkipped: number;
+  quotaUsed: number;
+}
+
 export interface Quota {
   used: number;
   limit: number;
