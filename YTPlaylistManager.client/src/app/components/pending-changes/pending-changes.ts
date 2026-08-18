@@ -1,7 +1,8 @@
 import { Component, ChangeDetectionStrategy, effect, signal, inject, OnDestroy } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { firstValueFrom, timeout, finalize, TimeoutError } from 'rxjs';
+import { firstValueFrom, timeout, finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
+import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import { PendingSongMove, PendingUpload } from '../../models/models';
@@ -20,6 +21,7 @@ import { PendingSongMove, PendingUpload } from '../../models/models';
 export class PendingChanges implements OnDestroy {
   protected readonly svc = inject(PendingService);
   private readonly api = inject(ApiService);
+  private readonly apiError = inject(ApiErrorService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
 
@@ -58,16 +60,7 @@ export class PendingChanges implements OnDestroy {
 
   private fail(e: unknown): void {
     this.busyId.set(null);
-    const status = (e as { status?: number })?.status;
-    this.error.set(
-      e instanceof TimeoutError
-        ? this.translate.instant('common.upload_timeout')
-        : status === 401
-          ? this.translate.instant('common.auth_expired')
-          : status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('playlists.upload_error'),
-    );
+    this.error.set(this.apiError.message(e, 'playlists.upload_error'));
   }
 
   async uploadMerge(pu: PendingUpload): Promise<void> {

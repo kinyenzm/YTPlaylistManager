@@ -17,6 +17,7 @@ import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { Playlist, SongSearchResult } from '../../models/models';
+import { looksLikeVideoId, thumbUrl as youtubeThumbUrl } from '../../utils/youtube.utils';
 
 type GroupedSong = SongSearchResult & { playlistTitles: string[] };
 
@@ -115,9 +116,7 @@ export class CommandPalette implements OnDestroy {
           return of(null);
         }
         this.loading.set(true);
-        // Si parece un videoId (11 chars alfanumérico o guión) buscar por ID, si no por nombre
-        const looksLikeId = /^[A-Za-z0-9_-]{8,}$/.test(trimmed) && !trimmed.includes(' ');
-        const query = looksLikeId
+        const query = looksLikeVideoId(trimmed)
           ? { videoIdPartial: trimmed, searchScope: 'active' }
           : { songNameFuzzy: trimmed, searchScope: 'active' };
         return this.api.searchSongs(query).pipe(catchError(() => of([])));
@@ -185,6 +184,6 @@ export class CommandPalette implements OnDestroy {
   }
 
   protected thumbUrl(videoId: string): string {
-    return `https://i.ytimg.com/vi/${videoId}/default.jpg`;
+    return youtubeThumbUrl(videoId);
   }
 }

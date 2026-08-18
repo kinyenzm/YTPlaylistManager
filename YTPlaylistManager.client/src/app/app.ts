@@ -1,7 +1,6 @@
 import {
   Component,
   ChangeDetectionStrategy,
-  signal,
   computed,
   effect,
   inject,
@@ -11,13 +10,10 @@ import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
 import { AuthService } from './services/auth.service';
+import { LangService } from './services/lang.service';
 import { LangSwitcher } from './components/lang-switcher/lang-switcher';
 import { PendingChanges } from './components/pending-changes/pending-changes';
 import { CommandPalette } from './components/command-palette/command-palette';
-
-const STORAGE_KEY = 'ytpm.lang';
-const SUPPORTED = ['es', 'en'] as const;
-type Lang = (typeof SUPPORTED)[number];
 
 function mapUrlToLang(url: string, es: boolean): string {
   const rules: [RegExp, string][] = es
@@ -27,19 +23,6 @@ function mapUrlToLang(url: string, es: boolean): string {
     if (re.test(url)) return url.replace(re, replacement);
   }
   return url;
-}
-
-function detectInitialLang(): Lang {
-  if (typeof localStorage !== 'undefined') {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (SUPPORTED as readonly string[]).includes(saved)) {
-      return saved as Lang;
-    }
-  }
-  if (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('en')) {
-    return 'en';
-  }
-  return 'es';
 }
 
 @Component({
@@ -52,13 +35,14 @@ export class App implements OnInit {
   private readonly api = inject(ApiService);
   private readonly translate = inject(TranslateService);
   private readonly router = inject(Router);
+  private readonly langSvc = inject(LangService);
   protected readonly auth = inject(AuthService);
 
   protected readonly loginUrl = this.api.loginUrl();
   protected readonly quota = this.api.quota;   // cuota de YouTube restante hoy
 
   // Idioma actual → rutas en es/en (ambas resuelven; ver app.routes.ts).
-  protected readonly lang = signal<string>(detectInitialLang());
+  protected readonly lang = this.langSvc.current;
   protected readonly navPaths = computed(() => {
     const es = this.lang().startsWith('es');
     return {
@@ -83,17 +67,8 @@ export class App implements OnInit {
   }
 
   ngOnInit(): void {
-    const lang = detectInitialLang();
-    this.translate.use(lang);
-    if (typeof document !== 'undefined') {
-      document.documentElement.lang = lang;
-    }
+    // La URL vive en el idioma activo: al cambiarlo, se traduce la ruta actual.
     this.translate.onLangChange.subscribe((e) => {
-      this.lang.set(e.lang);
-      if (typeof document !== 'undefined') {
-        document.documentElement.lang = e.lang;
-      }
-      
       const mapped = mapUrlToLang(this.router.url, e.lang.startsWith('es'));
       if (mapped !== this.router.url) this.router.navigateByUrl(mapped);
     });

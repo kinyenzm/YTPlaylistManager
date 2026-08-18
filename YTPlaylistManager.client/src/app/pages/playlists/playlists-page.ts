@@ -2,7 +2,9 @@ import { Component, ChangeDetectionStrategy, signal, computed, effect, inject, u
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
+import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import { Playlist, MergeResult, MergePreview } from '../../models/models';
@@ -22,6 +24,7 @@ interface RefreshAllResult {
 })
 export class PlaylistsPage implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly apiError = inject(ApiErrorService);
   private readonly translate = inject(TranslateService);
   private readonly pending = inject(PendingService);
   private readonly auth = inject(AuthService);
@@ -121,21 +124,12 @@ export class PlaylistsPage implements OnInit {
   load(refresh = false): void {
     this.loading.set(true);
     this.error.set(null);
-    this.api.listPlaylists(refresh).subscribe({
-      next: (list) => {
-        this.playlists.set(list);
-        this.loading.set(false);
-      },
-      error: (e) => {
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('playlists.error_load'),
-        );
-        this.loading.set(false);
-        console.error(e);
-      },
-    });
+    this.api.listPlaylists(refresh)
+      .pipe(finalize(() => this.loading.set(false)))
+      .subscribe({
+        next: (list) => this.playlists.set(list),
+        error: (e) => this.error.set(this.apiError.message(e, 'playlists.error_load')),
+      });
   }
 
   toggle(id: string): void {
@@ -164,17 +158,12 @@ export class PlaylistsPage implements OnInit {
     }
     this.previewing.set(true);
     this.error.set(null);
-    this.api.previewMerge(targetId, sourceIds).subscribe({
-      next: (p) => {
-        this.preview.set(p);
-        this.previewing.set(false);
-      },
-      error: (e) => {
-        this.error.set(this.translate.instant('playlists.error_merge'));
-        this.previewing.set(false);
-        console.error(e);
-      },
-    });
+    this.api.previewMerge(targetId, sourceIds)
+      .pipe(finalize(() => this.previewing.set(false)))
+      .subscribe({
+        next: (p) => this.preview.set(p),
+        error: (e) => this.error.set(this.apiError.message(e, 'playlists.error_merge')),
+      });
   }
 
   cancelPreview(): void {
@@ -202,19 +191,15 @@ export class PlaylistsPage implements OnInit {
         privacy: 'private',
         deleteSources: false,
       })
+      .pipe(finalize(() => this.merging.set(false)))
       .subscribe({
         next: (r) => {
           this.mergeResult.set(r);
-          this.merging.set(false);
           this.selectedIds.set(new Set());
           this.load();
           this.pending.refresh();
         },
-        error: (e) => {
-          this.error.set(this.translate.instant('playlists.error_merge'));
-          this.merging.set(false);
-          console.error(e);
-        },
+        error: (e) => this.error.set(this.apiError.message(e, 'playlists.error_merge')),
       });
   }
 
@@ -232,19 +217,16 @@ export class PlaylistsPage implements OnInit {
     this.refreshConfirmOpen.set(false);
     this.refreshing.set(true);
     this.error.set(null);
-    this.api.refreshAll().subscribe({
-      next: (r) => {
-        this.refreshResult.set(r);
-        this.refreshing.set(false);
-        this.api.refreshQuota();
-        this.load();
-      },
-      error: (e) => {
-        this.error.set(this.translate.instant('playlists.refresh_all_error'));
-        this.refreshing.set(false);
-        console.error(e);
-      },
-    });
+    this.api.refreshAll()
+      .pipe(finalize(() => this.refreshing.set(false)))
+      .subscribe({
+        next: (r) => {
+          this.refreshResult.set(r);
+          this.api.refreshQuota();
+          this.load();
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'playlists.refresh_all_error')),
+      });
   }
 
   dismissRefreshResult(): void {

@@ -1,7 +1,9 @@
 import { Component, ChangeDetectionStrategy, signal, inject, input, effect, OnInit } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
+import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../services/api.service';
+import { ApiErrorService } from '../../services/api-error.service';
 import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, SongMovementLog, ActivityItem } from '../../models/models';
 
 @Component({
@@ -12,7 +14,7 @@ import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, SongMovementLog,
 })
 export class CacheExplorer implements OnInit {
   private readonly api = inject(ApiService);
-  private readonly translate = inject(TranslateService);
+  private readonly apiError = inject(ApiErrorService);
 
   cacheStatus = signal<CacheStatus | null>(null);
   archivedPlaylists = signal<PlaylistArchivedInfo[]>([]);
@@ -46,56 +48,32 @@ export class CacheExplorer implements OnInit {
     });
   }
 
+  // Las tres lecturas son independientes: van en paralelo. Solo el estado del
+  // caché es obligatorio; archivadas y revisiones degradan a vacío si fallan.
   loadCacheData(): void {
     this.isLoading.set(true);
     this.error.set(null);
 
-    this.api.getCacheStatus().subscribe({
-      next: (status) => {
-        this.cacheStatus.set(status);
-        this.loadArchivedPlaylists();
-      },
-      error: (err) => {
-        this.error.set(this.translate.instant('cache.error_load', { msg: err.message }));
-        this.isLoading.set(false);
-      },
-    });
-  }
-
-  loadArchivedPlaylists(): void {
-    this.api.getArchivedPlaylists().subscribe({
-      next: (archived) => {
-        this.archivedPlaylists.set(archived);
-        this.loadMergeReviews();
-      },
-      error: (err) => {
-        console.error('Error loading archived playlists:', err);
-        this.loadMergeReviews();
-      },
-    });
-  }
-
-  loadMergeReviews(): void {
-    this.api.getMergeReviews().subscribe({
-      next: (reviews) => {
-        this.mergeReviews.set(reviews);
-        this.isLoading.set(false);
-      },
-      error: (err) => {
-        console.error('Error loading merge reviews:', err);
-        this.isLoading.set(false);
-      },
-    });
+    forkJoin({
+      status: this.api.getCacheStatus(),
+      archived: this.api.getArchivedPlaylists().pipe(catchError(() => of([] as PlaylistArchivedInfo[]))),
+      reviews: this.api.getMergeReviews().pipe(catchError(() => of([] as MergeReviewSummary[]))),
+    })
+      .pipe(finalize(() => this.isLoading.set(false)))
+      .subscribe({
+        next: ({ status, archived, reviews }) => {
+          this.cacheStatus.set(status);
+          this.archivedPlaylists.set(archived);
+          this.mergeReviews.set(reviews);
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'cache.error_load', { msg: (e as Error)?.message })),
+      });
   }
 
   viewSongHistory(videoId: string): void {
     this.api.getSongHistory(videoId).subscribe({
-      next: (history) => {
-        this.selectedSongHistory.set(history);
-      },
-      error: (err) => {
-        this.error.set(this.translate.instant('cache.error_history', { msg: err.message }));
-      },
+      next: (history) => this.selectedSongHistory.set(history),
+      error: (e) => this.error.set(this.apiError.message(e, 'cache.error_history', { msg: (e as Error)?.message })),
     });
   }
 

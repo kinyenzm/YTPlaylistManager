@@ -299,7 +299,7 @@
         <a [href]="'https://www.youtube.com/watch?v=' + r.videoId" target="_blank" rel="noopener"
           (click)="$event.stopPropagation()">{{ r.title }}</a>
         @if (r.appearsInCount > 1) {
-        <span class="tag" style="margin-left:6px">en {{ r.appearsInCount }} listas</span>
+        <span class="tag tag--inline">{{ 'cross.in_count' | translate:{ count: r.appearsInCount } }}</span>
         }
       </div>
       <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{

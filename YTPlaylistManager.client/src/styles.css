@@ -654,9 +654,11 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .card--skeleton .row { margin-bottom: 10px; }
 
 /* ── Row modifiers ── */
-.row--start    { align-items: flex-start; }
+/* .row--start va después de .row--between: combinadas, gana flex-start. */
 .row--between  { justify-content: space-between; align-items: center; }
+.row--start    { align-items: flex-start; }
 .row--end      { justify-content: flex-end; }
+.row--no-shrink { flex-shrink: 0; }
 .row--wrap     { flex-wrap: wrap; }
 .row--tight    { gap: 6px; }
 .row--tags     { gap: 4px; flex-wrap: wrap; margin-top: 4px; }
@@ -675,17 +677,31 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 
 /* ── Tags ── */
 .tag--danger { background: var(--accent); color: #fff; }
+.tag--inline { margin-left: 6px; }
 
 /* ── Cards ── */
 .card__title     { margin: 8px 0 4px; }
 .card__date      { font-size: .85em; margin-top: 4px; }
 .card__queue-tag { margin: 0 0 6px; }
 .card--warning   { padding: 8px 12px; margin-bottom: 8px; }
+.card--accent    { border-color: var(--accent2); }
 
 /* ── Modal ── */
 .modal--large  { max-width: 640px; max-height: 82vh; overflow: auto; }
+.modal--wide   { max-width: 700px; width: 94vw; max-height: 86vh; overflow: auto; }
 .modal__title  { margin-top: 0; }
 .modal__list   { margin: 8px 0; }
+.modal__intro  { margin: 6px 0 0; }
+
+/* ── Panel de cambios pendientes ── */
+.pending__note    { margin-top: 10px; }
+.pending__group   { margin: 14px 0 4px; }
+.pending__quota   { margin: 4px 0; }
+.pending__warning { margin: 6px 0; }
+.pending__toggle  { cursor: pointer; }
+.pending__songs   { margin-top: 6px; }
+.pending__title   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pending__close   { padding: 2px 10px; }
 
 
 /* ── Organizador (cross-duplicates) ── */

@@ -13,11 +13,13 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Title } from '@angular/platform-browser';
-import { debounceTime, delay, firstValueFrom, Subject } from 'rxjs';
+import { debounceTime, delay, finalize, firstValueFrom, Subject } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
+import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
+import { looksLikeVideoId, thumbUrl } from '../../utils/youtube.utils';
 import {
   ClassifyResult,
   CrossDuplicate,
@@ -51,6 +53,7 @@ interface SongDraft {
 })
 export class CrossDuplicates {
   private readonly api = inject(ApiService);
+  private readonly apiError = inject(ApiErrorService);
   private readonly translate = inject(TranslateService);
   private readonly titleSvc = inject(Title);
   private readonly destroyRef = inject(DestroyRef);
@@ -102,7 +105,7 @@ export class CrossDuplicates {
   });
 
   thumb(videoId: string): string {
-    return `https://i.ytimg.com/vi/${videoId}/default.jpg`;
+    return thumbUrl(videoId);
   }
   refsFor(ids: string[]): { id: string; title: string }[] {
     const t = this.titleById();
@@ -253,8 +256,7 @@ export class CrossDuplicates {
       const navQ = this.q();
       if (!navQ) return;
       untracked(() => {
-        const looksLikeId = /^[A-Za-z0-9_-]{8,}$/.test(navQ) && !navQ.includes(' ');
-        if (looksLikeId) {
+        if (looksLikeVideoId(navQ)) {
           this.idInput.set(navQ);
         } else {
           this.nameInput.set(navQ);
@@ -289,18 +291,15 @@ export class CrossDuplicates {
     this.loadingRecover.set(true);
     this.error.set(null);
     this.recoverSel.set(new Set());
-    this.api.recoverableSongs().pipe(delay(0)).subscribe({   // delay(0): deja pintar el skeleton
-      next: (r) => {
-        this.recoverable.set(r);
-        this.recoverLoaded.set(true);
-        this.loadingRecover.set(false);
-      },
-      error: (e) => {
-        this.error.set(this.translate.instant('cross.error_scan'));
-        this.loadingRecover.set(false);
-        console.error(e);
-      },
-    });
+    this.api.recoverableSongs()
+      .pipe(delay(0), finalize(() => this.loadingRecover.set(false)))   // delay(0): deja pintar el skeleton
+      .subscribe({
+        next: (r) => {
+          this.recoverable.set(r);
+          this.recoverLoaded.set(true);
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
+      });
   }
 
   toggleRecoverSel(videoId: string): void {
@@ -341,22 +340,13 @@ export class CrossDuplicates {
       targetPlaylistId: targetId || null,
       newPlaylistTitle: targetId ? null : newTitle,
       songs,
-    }).subscribe({
+    }).pipe(finalize(() => this.stagingRecover.set(false))).subscribe({
       next: () => {
-        this.stagingRecover.set(false);
         this.recoverSel.set(new Set());
         this.recoverNewTitle.set('');
         this.pendingSvc.refresh();   // queda en el chip de pendientes; el usuario sube cuando quiera
       },
-      error: (e) => {
-        this.stagingRecover.set(false);
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('cross.error_scan'),
-        );
-        console.error(e);
-      },
+      error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
     });
   }
 
@@ -385,22 +375,15 @@ export class CrossDuplicates {
     this.loading.set(true);
     this.error.set(null);
     this.report.set(null);
-    this.api.crossDuplicates(refresh).subscribe({
-      next: (r) => {
-        this.report.set(r);
-        this.loading.set(false);
-        this.loadPlaylists();
-      },
-      error: (e) => {
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('cross.error_scan'),
-        );
-        this.loading.set(false);
-        console.error(e);
-      },
-    });
+    this.api.crossDuplicates(refresh)
+      .pipe(finalize(() => this.loading.set(false)))
+      .subscribe({
+        next: (r) => {
+          this.report.set(r);
+          this.loadPlaylists();
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
+      });
   }
 
   // ── Modo por lista ──
@@ -415,70 +398,53 @@ export class CrossDuplicates {
     if (!id) return;
     this.loadingItems.set(true);
     this.error.set(null);
-    this.api.listItems(id, true).pipe(delay(0)).subscribe({   // delay(0) rompe la cadena síncrona del caché para que Angular pinte el skeleton
-      next: (items) => {
-        this.listItems.set(items);
-        this.loadingItems.set(false);
-        const ids = items.map((i) => i.videoId).filter(Boolean);
-        if (ids.length) {
-          this.api.songLocationsBatch(ids).subscribe({
-            next: (m) => this.locMap.set(m),
-            error: (e) => console.error(e),
-          });
-        }
-      },
-      error: (e) => {
-        this.error.set(this.translate.instant('cross.error_scan'));
-        this.loadingItems.set(false);
-        console.error(e);
-      },
-    });
+    this.api.listItems(id, true)
+      .pipe(delay(0), finalize(() => this.loadingItems.set(false)))   // delay(0) rompe la cadena síncrona del caché para que Angular pinte el skeleton
+      .subscribe({
+        next: (items) => {
+          this.listItems.set(items);
+          const ids = items.map((i) => i.videoId).filter(Boolean);
+          if (ids.length) {
+            this.api.songLocationsBatch(ids).subscribe({
+              next: (m) => this.locMap.set(m),
+              error: (e) => console.error(e),
+            });
+          }
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
+      });
   }
 
   // ── Herramientas de lista: repetidas internas + IA ──
   loadDuplicates(): void {
     if (!this.listId()) return;
     this.loadingDup.set(true);
-    this.api.findDuplicates(this.listId()).subscribe({
-      next: (r) => {
-        this.duplicates.set(r);
-        this.loadingDup.set(false);
-        this.api.refreshQuota();
-        this.pickList(this.listId());
-      },
-      error: (e) => {
-        this.loadingDup.set(false);
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('cross.error_scan'),
-        );
-        console.error(e);
-      },
-    });
+    this.api.findDuplicates(this.listId())
+      .pipe(finalize(() => this.loadingDup.set(false)))
+      .subscribe({
+        next: (r) => {
+          this.duplicates.set(r);
+          this.api.refreshQuota();
+          this.pickList(this.listId());
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
+      });
   }
 
   cleanDuplicates(): void {
     if (!this.listId()) return;
     if (!confirm(this.translate.instant('detail.confirm_remove'))) return;
     this.cleaning.set(true);
-    this.api.removeDuplicates(this.listId(), this.strategy()).subscribe({
-      next: (r) => {
-        alert(this.translate.instant('detail.alert_removed', { removed: r.removed, kept: r.kept }));
-        this.cleaning.set(false);
-        this.pickList(this.listId());
-        this.loadDuplicates();
-      },
-      error: (e) => {
-        this.cleaning.set(false);
-        this.error.set(
-          e?.status === 403
-            ? this.translate.instant('common.youtube_quota_exhausted')
-            : this.translate.instant('cross.error_scan'),
-        );
-        console.error(e);
-      },
-    });
+    this.api.removeDuplicates(this.listId(), this.strategy())
+      .pipe(finalize(() => this.cleaning.set(false)))
+      .subscribe({
+        next: (r) => {
+          alert(this.translate.instant('detail.alert_removed', { removed: r.removed, kept: r.kept }));
+          this.pickList(this.listId());
+          this.loadDuplicates();
+        },
+        error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
+      });
   }
 
   private stageRemoval(ids: string[], songTitle: string): void {
@@ -521,20 +487,18 @@ export class CrossDuplicates {
     if (!this.listId()) return;
     this.classifying.set(true);
     this.aiError.set(null);
-    this.api.classify(this.listId(), this.aiMode()).subscribe({
-      next: (r) => {
-        this.classification.set(r);
-        this.classifying.set(false);
-      },
-      error: (e) => {
-        this.classifying.set(false);
-        this.aiError.set(
+    // El 503 (proveedor de IA sin configurar) no lo cubre el helper: es un fallo
+    // del clasificador, no de YouTube.
+    this.api.classify(this.listId(), this.aiMode())
+      .pipe(finalize(() => this.classifying.set(false)))
+      .subscribe({
+        next: (r) => this.classification.set(r),
+        error: (e) => this.aiError.set(
           e?.status === 503
             ? this.translate.instant('detail.ai_config_error')
             : this.translate.instant('detail.ai_generic_error'),
-        );
-      },
-    });
+        ),
+      });
   }
 
   // ── Modo por canción: filtros en vivo ──
@@ -555,16 +519,9 @@ export class CrossDuplicates {
       videoIdPartial: id || null,
       songNameFuzzy: name || null,
       searchScope: this.searchScope(),
-    }).subscribe({
-      next: (r) => {
-        this.results.set(r);
-        this.searching.set(false);
-      },
-      error: (e) => {
-        this.error.set(this.translate.instant('cross.error_scan'));
-        this.searching.set(false);
-        console.error(e);
-      },
+    }).pipe(finalize(() => this.searching.set(false))).subscribe({
+      next: (r) => this.results.set(r),
+      error: (e) => this.error.set(this.apiError.message(e, 'cross.error_scan')),
     });
   }
 
@@ -645,8 +602,7 @@ export class CrossDuplicates {
         this.discardCard(videoId);
       }
     } catch (e) {
-      this.error.set(this.translate.instant('cross.assign_error'));
-      console.error(e);
+      this.error.set(this.apiError.message(e, 'cross.assign_error'));
       allOk = false;
     } finally {
       this.savingAll.set(false);
@@ -680,30 +636,30 @@ export class CrossDuplicates {
     this.editingVideoId.set(row.videoId);
     this.editingTitle.set(row.title);
     this.editorLoading.set(true);
-    this.api.songLocations(row.videoId).subscribe({
-      next: (locs) => {
-        // Con draft previo la selección arranca del draft (no del servidor) y el
-        // baseline original se conserva para no perder las adiciones acumuladas.
-        const existing = this.drafts()[row.videoId];
-        this.editorBaseline.set(existing?.baseline ?? locs);
-        const sel = new Set(existing?.desired ?? locs);
-        this.selection.set(sel);
-        // Primero las listas donde ya está; el resto alfabético (orden del backend).
-        this.editorPlaylists.set(
-          [...this.allPlaylists()].sort(
-            (a, b) => (sel.has(b.id) ? 1 : 0) - (sel.has(a.id) ? 1 : 0),
-          ),
-        );
-        this.editorLoading.set(false);
-      },
-      error: (e) => {
-        this.editorBaseline.set([]);
-        this.selection.set(new Set());
-        this.editorPlaylists.set([...this.allPlaylists()]);
-        this.editorLoading.set(false);
-        console.error(e);
-      },
-    });
+    this.api.songLocations(row.videoId)
+      .pipe(finalize(() => this.editorLoading.set(false)))
+      .subscribe({
+        next: (locs) => {
+          // Con draft previo la selección arranca del draft (no del servidor) y el
+          // baseline original se conserva para no perder las adiciones acumuladas.
+          const existing = this.drafts()[row.videoId];
+          this.editorBaseline.set(existing?.baseline ?? locs);
+          const sel = new Set(existing?.desired ?? locs);
+          this.selection.set(sel);
+          // Primero las listas donde ya está; el resto alfabético (orden del backend).
+          this.editorPlaylists.set(
+            [...this.allPlaylists()].sort(
+              (a, b) => (sel.has(b.id) ? 1 : 0) - (sel.has(a.id) ? 1 : 0),
+            ),
+          );
+        },
+        // Sin ubicaciones el modal abre igual, con todo desmarcado.
+        error: () => {
+          this.editorBaseline.set([]);
+          this.selection.set(new Set());
+          this.editorPlaylists.set([...this.allPlaylists()]);
+        },
+      });
   }
 
   closeEditor(): void {
