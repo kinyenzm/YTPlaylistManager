@@ -96,6 +96,7 @@ export interface UploadResult {
   remainingPending: number;
   deletedSources: number;
   remainingSources: number;
+  targetMissing: boolean;
 }
 
 export interface ClassifiedSong {

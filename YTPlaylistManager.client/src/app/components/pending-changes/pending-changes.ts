@@ -84,6 +84,10 @@ export class PendingChanges implements OnDestroy {
             .pipe(timeout({ each: 120_000 }))
         );
         totalUploaded += r.uploaded;
+        if (r.targetMissing) {
+          this.error.set(this.translate.instant('pending.target_missing', { title: r.targetPlaylistTitle }));
+          break;
+        }
         if (r.paused || r.remainingPending === 0) {
           let m = this.translate.instant('playlists.upload_done', { uploaded: totalUploaded });
           if (r.deletedSources > 0) m += ' ' + this.translate.instant('playlists.upload_deleted', { n: r.deletedSources });
@@ -156,6 +160,11 @@ export class PendingChanges implements OnDestroy {
           );
           totalUploaded += r.uploaded;
           this.api.refreshQuota();
+          if (r.targetMissing) {
+            parts.push(this.translate.instant('pending.target_missing', { title: r.targetPlaylistTitle }));
+            paused = true;   // corta el recorrido: el resto se sube en otra pasada
+            break;
+          }
           if (r.paused || r.remainingPending === 0) {
             parts.push(this.translate.instant('playlists.upload_done', { uploaded: totalUploaded }));
             if (r.deletedSources > 0) parts.push(this.translate.instant('playlists.upload_deleted', { n: r.deletedSources }));

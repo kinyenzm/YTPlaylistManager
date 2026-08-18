@@ -146,7 +146,8 @@ public record UploadResultDto(
     bool Paused,             // se cortó por límite diario de YouTube
     int RemainingPending,    // canciones que quedaron sin subir (si Paused)
     int DeletedSources = 0,  // listas origen borradas de YouTube
-    int RemainingSources = 0 // listas origen que faltan borrar (si se cortó)
+    int RemainingSources = 0,// listas origen que faltan borrar (si se cortó)
+    bool TargetMissing = false // la lista destino ya no existe: solo queda descartar
 );
 
 // ── Asignar una canción a varias/una playlist (staged) ──

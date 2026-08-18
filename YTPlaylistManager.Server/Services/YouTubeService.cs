@@ -623,11 +623,11 @@ public class YouTubeService : IYouTubeService
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
 
         // Validación previa (0 cuota): si la lista destino ya no existe, cortar acá —
-        // sin gastar unidades ni tocar la caché ni las listas origen.
+        // sin gastar unidades ni tocar la caché ni las listas origen. No es un error de
+        // la petición sino un estado del mundo, así que se informa en el resultado.
         if (IsKnownMissing(plan.TargetPlaylistId))
-            throw new ArgumentException(
-                $"La lista destino «{plan.TargetPlaylistTitle}» ya no existe en YouTube. " +
-                "Descartá este cambio pendiente: nada se subió y las listas origen quedaron intactas.");
+            return new UploadResultDto(id, plan.TargetPlaylistId, plan.TargetPlaylistTitle,
+                0, 0, false, plan.Items.Count, 0, plan.Sources.Count, TargetMissing: true);
 
         var yt = BuildClient();
         var targetId = plan.TargetPlaylistId;
@@ -784,14 +784,13 @@ public class YouTubeService : IYouTubeService
 
         _log.Add("Upload", $"pending={id} target={targetId} uploaded={uploaded} failed={failed} deletedSources={deletedSources} paused={paused} remItems={remaining.Count} remSources={remainingSources.Count} targetMissing={targetMissing}");
 
-        // Con el estado ya persistido: cortar con error explícito para que el cliente
-        // no reintente en loop un plan cuyo destino ya no existe.
-        if (targetMissing)
-            throw new ArgumentException(
-                $"La lista destino «{plan.TargetPlaylistTitle}» ya no existe en YouTube. " +
-                "Descartá este cambio pendiente (nada se subió y las listas origen quedaron intactas).");
+        // YouTube respondió 404: la lista destino ya no existe. Se saca de la caché de
+        // listas para que el próximo listado de pendientes ya venga con TargetMissing y
+        // la UI oculte el botón de subir, en vez de chocar contra el mismo 404 cada vez.
+        if (targetMissing) RemoveFromPlaylistListCache([targetId]);
 
-        return new UploadResultDto(id, targetId, plan.TargetPlaylistTitle, uploaded, failed, paused, remaining.Count, deletedSources, remainingSources.Count);
+        return new UploadResultDto(id, targetId, plan.TargetPlaylistTitle, uploaded, failed, paused,
+            remaining.Count, deletedSources, remainingSources.Count, targetMissing);
     }
 
     /// <summary>Quita playlists de la caché de la lista (tras borrarlas en YouTube).</summary>
