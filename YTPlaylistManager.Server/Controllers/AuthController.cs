@@ -15,7 +15,8 @@ public sealed class AuthController(
     PlaylistItemsCacheStore itemsCache,
     PlaylistCacheStore playlistCache,
     PendingUploadStore pendingUploads,
-    PendingSongMoveStore songMoves) : ControllerBase
+    PendingSongMoveStore songMoves,
+    GoogleSessionValidator validator) : ControllerBase
 {
     // Inicia el flujo OAuth2 redirigiendo al consent screen de Google.
     [HttpGet("login")]
@@ -121,14 +122,15 @@ public sealed class AuthController(
     }
 
     [HttpGet("status")]
-    public IActionResult Status()
+    public async Task<IActionResult> Status(CancellationToken ct)
     {
+        // Mismo criterio que RequireGoogleSession: se valida contra Google cuando el
+        // access token venció, para no reportar "conectado" con un refresh revocado.
+        var alive = await validator.IsAliveAsync(ct);
         var t = store.Load();
         return Ok(new
         {
-            // Mismo criterio que RequireGoogleSession: evita "conectado" fantasma
-            // con un access token vencido y sin refresh.
-            isAuthenticated = t is not null && t.HasUsableSession,
+            isAuthenticated = alive,
             expiresAtUtc = t?.ExpiresAtUtc,
             hasRefreshToken = !string.IsNullOrEmpty(t?.RefreshToken)
         });

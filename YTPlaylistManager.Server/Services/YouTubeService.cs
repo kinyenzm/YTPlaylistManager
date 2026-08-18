@@ -26,6 +26,7 @@ public class YouTubeService : IYouTubeService
     private readonly QuotaTracker _quota;
     private readonly ActivityBroadcaster _activity;
     private readonly PlaylistTouchStore _touchStore;
+    private readonly GoogleSessionValidator _session;
     private readonly ILogger<YouTubeService> _logger;
 
     public YouTubeService(
@@ -41,6 +42,7 @@ public class YouTubeService : IYouTubeService
         QuotaTracker quota,
         ActivityBroadcaster activity,
         PlaylistTouchStore touchStore,
+        GoogleSessionValidator session,
         ILogger<YouTubeService> logger)
     {
         _cfg = cfg;
@@ -55,6 +57,7 @@ public class YouTubeService : IYouTubeService
         _quota = quota;
         _activity = activity;
         _touchStore = touchStore;
+        _session = session;
         _logger = logger;
     }
 
@@ -140,15 +143,9 @@ public class YouTubeService : IYouTubeService
         var token = _tokenStore.Load()
             ?? throw new NotAuthenticatedException("No hay sesión Google activa. Visita /api/auth/login primero.");
 
-        var flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-        {
-            ClientSecrets = new ClientSecrets
-            {
-                ClientId = _cfg["Google:ClientId"],
-                ClientSecret = _cfg["Google:ClientSecret"]
-            },
-            Scopes = _cfg.GetSection("Google:Scopes").Get<string[]>() ?? Array.Empty<string>()
-        });
+        // Flujo con DataStore: el access token renovado se persiste en vez de perderse
+        // al terminar la petición.
+        var flow = _session.CreateFlow();
 
         var tokenResponse = new TokenResponse
         {
@@ -1283,23 +1280,17 @@ public class YouTubeService : IYouTubeService
 
         // Si no hay caché de playlists, la primera llamada rellena la lista
         // (consume ~1u de quota, ~50 playlists por página).
-        var playlists = await GetMyPlaylistsAsync(ct, forceRefresh: cache?.Playlists is null or { Count: 0 });
+        // Refrescar es justamente ignorar la caché: antes se saltaba toda lista que ya
+        // tuviera items guardados, así que con la caché caliente el botón no hacía nada.
+        var playlists = await GetMyPlaylistsAsync(ct, forceRefresh: true);
 
         int itemsRefreshed = 0;
         int playlistsRefreshed = 0;
         int playlistsSkipped = 0;
-        int quotaUsed = cache?.Playlists is null or { Count: 0 } ? 1 : 0;
+        int quotaUsed = 1;
 
         foreach (var pl in playlists)
         {
-            // Si ya está en caché con items → no la releemos (ahorra cuota).
-            var cached = _itemsCache.Load(userKey, pl.Id);
-            if (cached is not null)
-            {
-                playlistsSkipped++;
-                continue;
-            }
-
             try
             {
                 var items = await GetPlaylistItemsAsync(pl.Id, ct, forceRefresh: true);
@@ -1310,7 +1301,9 @@ public class YouTubeService : IYouTubeService
             }
             catch (Google.GoogleApiException ex)
             {
+                playlistsSkipped++;
                 _logger.LogWarning(ex, "No se pudo refrescar la playlist {Id}; se omite.", pl.Id);
+                if (QuotaTracker.IsQuotaError(ex)) break;   // sin cuota no tiene sentido seguir
             }
         }
 

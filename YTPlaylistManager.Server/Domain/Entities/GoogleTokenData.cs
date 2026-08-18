@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace YTPlaylistManager.Server.Domain.Entities;
 
 /// <summary>
@@ -17,6 +19,7 @@ public class GoogleTokenData
     /// access token presente y, si ya venció, un refresh token con el que el cliente
     /// de Google pueda renovarlo. Vencido y sin refresh = sesión muerta.
     /// </summary>
+    [JsonIgnore]
     public bool HasUsableSession =>
         !string.IsNullOrEmpty(AccessToken)
         && (ExpiresAtUtc > DateTime.UtcNow || !string.IsNullOrEmpty(RefreshToken));

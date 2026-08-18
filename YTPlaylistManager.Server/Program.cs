@@ -26,6 +26,8 @@ builder.Services.AddSingleton<ArchivedPlaylistsStore>();
 builder.Services.AddSingleton<PlaylistTouchStore>();
 builder.Services.AddSingleton<PlaylistCacheStore>();
 builder.Services.AddSingleton<PlaylistItemsCacheStore>();
+builder.Services.AddSingleton<GoogleTokenDataStore>();
+builder.Services.AddScoped<GoogleSessionValidator>();
 builder.Services.AddScoped<IYouTubeService, YouTubeService>();
 builder.Services.AddScoped<ISongSearchService, SongSearchService>();
 
