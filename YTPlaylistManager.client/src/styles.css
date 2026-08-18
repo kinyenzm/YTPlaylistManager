@@ -678,7 +678,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .skeleton {
   background: linear-gradient(90deg,
     var(--panel-2) 25%,
-    rgba(255,255,255,0.04) 50%,
+    rgba(198, 242, 78, 0.055) 50%,
     var(--panel-2) 75%);
   background-size: 600px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
@@ -817,3 +817,54 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .timeline__item  { display: flex; gap: 12px; margin-bottom: 12px; }
 .timeline__dot   { width: 12px; height: 12px; background: var(--accent2); border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
 .timeline__event { margin: 0 0 2px; }
+
+/* ── Momentos con carácter (midnight studio: la luz lima = la app trabajando) ── */
+
+/* Superficies del navegador: la selección también es de la casa. */
+::selection { background: var(--accent2); color: var(--ink); }
+
+/* El marcador de cuota no baila al cambiar de dígitos, y avisa UNA vez al entrar en crítico. */
+.app-header__quota { font-variant-numeric: tabular-nums; }
+.app-header__quota--critical { animation: quota-alert 0.5s ease-out; }
+@keyframes quota-alert {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* Los chips flotantes llegan con un pequeño rebote; el contador aparece después. */
+.pending-chip,
+.refresh-chip { animation: chip-in 0.35s cubic-bezier(0.3, 1.25, 0.5, 1) both; }
+@keyframes chip-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.7); }
+  to { opacity: 1; transform: none; }
+}
+.pending-chip__count { animation: count-pop 0.3s cubic-bezier(0.3, 1.25, 0.5, 1) 0.15s backwards; }
+@keyframes count-pop {
+  from { transform: scale(0); }
+  to { transform: none; }
+}
+
+/* La barra de borradores sube desde el borde cuando aparece el primer cambio. */
+.cross-org__draft-bar { animation: bar-rise 0.28s ease-out both; }
+@keyframes bar-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Aviso de éxito (subida completada): entra con un anillo lima que se asienta. */
+.card--accent { animation: settle-ring 0.6s ease-out both; }
+@keyframes settle-ring {
+  0% { opacity: 0; transform: translateY(6px); box-shadow: 0 0 0 6px rgba(198, 242, 78, 0); }
+  40% { opacity: 1; box-shadow: 0 0 0 4px rgba(198, 242, 78, 0.25); }
+  100% { transform: none; box-shadow: 0 0 0 1px rgba(198, 242, 78, 0.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending-chip,
+  .refresh-chip,
+  .pending-chip__count,
+  .cross-org__draft-bar,
+  .card--accent,
+  .app-header__quota--critical { animation: none; }
+}
