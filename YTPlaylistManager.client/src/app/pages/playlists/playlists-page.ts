@@ -189,14 +189,7 @@ export class PlaylistsPage implements OnInit {
     this.merging.set(true);
     this.mergeResult.set(null);
     this.api
-      .merge({
-        sourcePlaylistIds: sourceIds,
-        newPlaylistTitle: null,
-        targetPlaylistId: targetId,
-        deduplicateOnMerge: true,
-        privacy: 'private',
-        deleteSources: false,
-      })
+      .merge({ sourcePlaylistIds: sourceIds, targetPlaylistId: targetId })
       .pipe(finalize(() => this.merging.set(false)))
       .subscribe({
         next: (r) => {

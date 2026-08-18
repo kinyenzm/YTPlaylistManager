@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using YTPlaylistManager.Server.Domain.Entities;
+using YTPlaylistManager.Server.DTOs;
 using YTPlaylistManager.Server.Services;
 
 namespace YTPlaylistManager.Server.Controllers;
@@ -128,12 +129,7 @@ public sealed class AuthController(
         // access token venció, para no reportar "conectado" con un refresh revocado.
         var alive = await validator.IsAliveAsync(ct);
         var t = store.Load();
-        return Ok(new
-        {
-            isAuthenticated = alive,
-            expiresAtUtc = t?.ExpiresAtUtc,
-            hasRefreshToken = !string.IsNullOrEmpty(t?.RefreshToken)
-        });
+        return Ok(new AuthStatusDto(alive, t?.ExpiresAtUtc, !string.IsNullOrEmpty(t?.RefreshToken)));
     }
 
     [HttpPost("logout")]
@@ -153,6 +149,6 @@ public sealed class AuthController(
             });
         else
             store.Clear();
-        return Ok(new { ok = true });
+        return Ok(new AckDto(true));
     }
 }

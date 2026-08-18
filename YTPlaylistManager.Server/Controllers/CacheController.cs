@@ -49,8 +49,8 @@ public sealed class CacheController(
 
     /// <summary>Obtener lista de playlists archivadas (consolidadas en otra localmente)</summary>
     [HttpGet("playlists-archived")]
-    public async Task<ActionResult<List<PlaylistArchivedInfoDto>>> GetArchivedPlaylists()
-        => Ok(await youtube.GetArchivedPlaylistsAsync());
+    public ActionResult<List<PlaylistArchivedInfoDto>> GetArchivedPlaylists()
+        => Ok(youtube.GetArchivedPlaylists());
 
     /// <summary>Historial de merges aplicados localmente (cola de revisión).</summary>
     [HttpGet("merge-reviews")]

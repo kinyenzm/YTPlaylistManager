@@ -15,10 +15,10 @@ public interface IYouTubeService
     Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default);
 
     MergePreviewDto PreviewMerge(MergePreviewRequest req);
-    Task<MergePlaylistsResultDto> MergePlaylistsAsync(MergePlaylistsRequest req, CancellationToken ct = default);
+    MergePlaylistsResultDto MergePlaylists(MergePlaylistsRequest req);
     List<PendingUploadDto> GetPendingUploads();
     Task<UploadResultDto> UploadPendingAsync(string id, int? limit = null, CancellationToken ct = default);
     void DiscardPending(string id);
 
-    Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default);
+    List<PlaylistArchivedInfoDto> GetArchivedPlaylists();
 }

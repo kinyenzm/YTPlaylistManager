@@ -77,24 +77,19 @@ public record CrossDuplicateReportDto(
 
 // ── Merge ──
 
+// El merge SIEMPRE es hacia una lista existente; la deduplicación es implícita
+// (solo se agregan las canciones que faltan) y las fuentes van a la cola de borrado.
 public record MergePlaylistsRequest(
     List<string> SourcePlaylistIds,
-    string? TargetPlaylistId,         // si es null, se crea una nueva
-    string? NewPlaylistTitle,         // requerido cuando TargetPlaylistId es null
-    bool DeduplicateOnMerge = true,
-    string Privacy = "private",
-    bool DeleteSources = false        // archivar las playlists originales tras aplicar (local)
+    string TargetPlaylistId
 );
 
 public record MergePlaylistsResultDto(
     string TargetPlaylistId,
     string TargetPlaylistTitle,
-    int Added,
-    int SkippedDuplicates,
-    int ArchivedSources = 0,
-    string? ReviewId = null,          // id de la entrada en la cola de revisión
-    int Failed = 0,
-    bool Paused = false               // true si se cortó por límite diario de YouTube
+    int Added,                // canciones nuevas aplicadas en local
+    int SkippedDuplicates,    // ya estaban en la lista destino
+    string? PendingId         // id del pendiente creado (null si no hubo nada que encolar)
 );
 
 public record MergePreviewRequest(string TargetPlaylistId, List<string> SourcePlaylistIds);
@@ -197,6 +192,12 @@ public record SongMoveBulkResultDto(
 public record RemoveItemsRequest(string PlaylistId, List<string> PlaylistItemIds);
 
 public record QuotaDto(int Used, int Limit, int Remaining, string Date);
+
+public record StagedCountDto(int Staged);
+
+public record AuthStatusDto(bool IsAuthenticated, DateTime? ExpiresAtUtc, bool HasRefreshToken);
+
+public record AckDto(bool Ok);
 
 public record MergeReviewSummaryDto(
     string Id,

@@ -28,26 +28,13 @@ public interface ISongSearchService
 /// Opera 100% offline sobre <c>PlaylistCacheStore</c> (lista) + <c>PlaylistItemsCacheStore</c> (items).
 /// No llama a la YouTube API → 0 cuota.
 /// </summary>
-public class SongSearchService : ISongSearchService
+public sealed class SongSearchService(
+    PlaylistCacheStore cacheStore,
+    PlaylistItemsCacheStore itemsCache,
+    ArchivedPlaylistsStore archivedStore,
+    ILogger<SongSearchService> logger) : ISongSearchService
 {
     private const double FuzzyThreshold = 70.0;
-
-    private readonly PlaylistCacheStore _cacheStore;
-    private readonly PlaylistItemsCacheStore _itemsCache;
-    private readonly ArchivedPlaylistsStore _archivedStore;
-    private readonly ILogger<SongSearchService> _logger;
-
-    public SongSearchService(
-        PlaylistCacheStore cacheStore,
-        PlaylistItemsCacheStore itemsCache,
-        ArchivedPlaylistsStore archivedStore,
-        ILogger<SongSearchService> logger)
-    {
-        _cacheStore = cacheStore;
-        _itemsCache = itemsCache;
-        _archivedStore = archivedStore;
-        _logger = logger;
-    }
 
     private readonly record struct FlatItem(string PlaylistId, string PlaylistTitle, PlaylistItemDto Item);
 
@@ -55,12 +42,12 @@ public class SongSearchService : ISongSearchService
     private List<FlatItem> LoadAllCachedItems()
     {
         var flat = new List<FlatItem>();
-        var cache = _cacheStore.Load();
+        var cache = cacheStore.Load();
         if (cache?.Playlists is null) return flat;
 
         foreach (var pl in cache.Playlists)
         {
-            var items = _itemsCache.Load(cache.UserKey, pl.Id);
+            var items = itemsCache.Load(cache.UserKey, pl.Id);
             if (items is null) continue; // playlist aún no escaneada → sin items en caché
             foreach (var it in items)
             {
@@ -144,7 +131,7 @@ public class SongSearchService : ISongSearchService
         var scope = (searchScope ?? "all").ToLowerInvariant();
         if (scope is "active" or "archived")
         {
-            var archivedIds = _archivedStore.LoadAll().Select(e => e.Id).ToHashSet();
+            var archivedIds = archivedStore.LoadAll().Select(e => e.Id).ToHashSet();
             union = scope == "active"
                 ? union.Where(r => r.CurrentPlaylistId is null || !archivedIds.Contains(r.CurrentPlaylistId))
                 : union.Where(r => r.CurrentPlaylistId is not null && archivedIds.Contains(r.CurrentPlaylistId));

@@ -293,7 +293,7 @@ public sealed class YouTubeService(
             targetId, targetTitle, toAdd.Count, alreadyPresent, toAdd.Count * 50, toAdd, warnings);
     }
 
-    public Task<MergePlaylistsResultDto> MergePlaylistsAsync(MergePlaylistsRequest req, CancellationToken ct = default)
+    public MergePlaylistsResultDto MergePlaylists(MergePlaylistsRequest req)
     {
         var userKey = clientFactory.CurrentUserKey();
 
@@ -397,8 +397,7 @@ public sealed class YouTubeService(
 
         log.Add("Merge(local)", $"sources={string.Join(",", req.SourcePlaylistIds)} target={targetId} staged={added} skipped={skipped} pendingId={pendingId}");
 
-        return Task.FromResult(new MergePlaylistsResultDto(
-            targetId, targetTitle, added, skipped, 0, pendingId, 0, false));
+        return new MergePlaylistsResultDto(targetId, targetTitle, added, skipped, pendingId);
     }
 
     // ── Subida de pendientes ──
@@ -648,7 +647,7 @@ public sealed class YouTubeService(
 
     // ── Archivadas ──
 
-    public Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default)
+    public List<PlaylistArchivedInfoDto> GetArchivedPlaylists()
     {
         var byId = new Dictionary<string, PlaylistArchivedInfoDto>(StringComparer.Ordinal);
         foreach (var a in archivedStore.LoadAll())
@@ -680,7 +679,6 @@ public sealed class YouTubeService(
             }
         }
 
-        var list = byId.Values.OrderByDescending(x => x.ArchivedAt).ToList();
-        return Task.FromResult(list);
+        return byId.Values.OrderByDescending(x => x.ArchivedAt).ToList();
     }
 }

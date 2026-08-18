@@ -12,7 +12,7 @@ public sealed class PlaylistsController(IYouTubeService youtube, DuplicateServic
 {
     [HttpGet]
     [ProducesResponseType<List<PlaylistDto>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Listar(
+    public async Task<IActionResult> GetAll(
         [FromQuery] bool refresh,
         [FromQuery] bool includeArchived,
         CancellationToken ct)
@@ -27,28 +27,28 @@ public sealed class PlaylistsController(IYouTubeService youtube, DuplicateServic
 
     [HttpGet("{id}/duplicates")]
     [ProducesResponseType<DuplicateReportDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Duplicados(string id, CancellationToken ct)
+    public async Task<IActionResult> Duplicates(string id, CancellationToken ct)
         => Ok(await duplicates.FindDuplicatesAsync(id, ct));
 
     [HttpGet("cross-duplicates")]
     [ProducesResponseType<CrossDuplicateReportDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> DuplicadosEntrePlaylists([FromQuery] bool refresh, CancellationToken ct)
+    public async Task<IActionResult> CrossDuplicates([FromQuery] bool refresh, CancellationToken ct)
         => Ok(await duplicates.FindCrossDuplicatesAsync(ct, refresh));
 
     [HttpPost("remove-duplicates")]
     [ProducesResponseType<RemoveDuplicatesResultDto>(StatusCodes.Status200OK)]
-    public IActionResult RemoverDuplicados([FromBody] RemoveDuplicatesRequest req)
+    public IActionResult RemoveDuplicates([FromBody] RemoveDuplicatesRequest req)
         => Ok(duplicates.RemoveDuplicates(req));
 
     [HttpPost("merge")]
     [ProducesResponseType<MergePlaylistsResultDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Unir([FromBody] MergePlaylistsRequest req, CancellationToken ct)
-        => Ok(await youtube.MergePlaylistsAsync(req, ct));
+    public IActionResult Merge([FromBody] MergePlaylistsRequest req)
+        => Ok(youtube.MergePlaylists(req));
 
     [HttpPost("merge/preview")]
     [ProducesResponseType<MergePreviewDto>(StatusCodes.Status200OK)]
-    public IActionResult PreviewUnir([FromBody] MergePreviewRequest req)
+    public IActionResult PreviewMerge([FromBody] MergePreviewRequest req)
         => Ok(youtube.PreviewMerge(req));
 
     [HttpGet("pending-uploads")]
@@ -58,11 +58,11 @@ public sealed class PlaylistsController(IYouTubeService youtube, DuplicateServic
 
     [HttpPost("pending-uploads/{id}/upload")]
     [ProducesResponseType<UploadResultDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> SubirPendiente(string id, [FromQuery] int? limit, CancellationToken ct)
+    public async Task<IActionResult> UploadPending(string id, [FromQuery] int? limit, CancellationToken ct)
         => Ok(await youtube.UploadPendingAsync(id, limit, ct));
 
     [HttpDelete("pending-uploads/{id}")]
-    public IActionResult DescartarPendiente(string id)
+    public IActionResult DiscardPending(string id)
     {
         youtube.DiscardPending(id);
         return NoContent();
@@ -75,7 +75,7 @@ public sealed class PlaylistsController(IYouTubeService youtube, DuplicateServic
 
     [HttpPost("{id}/classify")]
     [ProducesResponseType<ClassifyResultDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Clasificar(string id, [FromBody] ClassifyRequest req, CancellationToken ct)
+    public async Task<IActionResult> Classify(string id, [FromBody] ClassifyRequest req, CancellationToken ct)
     {
         var items = await youtube.GetPlaylistItemsAsync(id, ct);
         var groups = await ai.ClassifyAsync(items, req.Mode ?? "genre", ct);

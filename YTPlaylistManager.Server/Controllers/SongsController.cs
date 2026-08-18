@@ -55,7 +55,7 @@ public sealed class SongsController(
     /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist (staged).</summary>
     [HttpPost("remove-items")]
     public IActionResult RemoveItems([FromBody] RemoveItemsRequest req)
-        => Ok(new { staged = songMoves.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
+        => Ok(new StagedCountDto(songMoves.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds)));
 
     /// <summary>
     /// Canciones huérfanas: conocidas por la app pero fuera de todas las playlists

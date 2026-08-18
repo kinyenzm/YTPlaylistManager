@@ -36,24 +36,18 @@ export interface DuplicateReport {
   groups: DuplicateGroup[];
 }
 
+// El merge siempre es hacia una lista existente; deduplica implícitamente.
 export interface MergeRequest {
   sourcePlaylistIds: string[];
-  targetPlaylistId?: string | null;
-  newPlaylistTitle?: string | null;
-  deduplicateOnMerge: boolean;
-  privacy: 'private' | 'unlisted' | 'public';
-  deleteSources: boolean;
+  targetPlaylistId: string;
 }
 
 export interface MergeResult {
   targetPlaylistId: string;
   targetPlaylistTitle: string;
-  added: number;
-  skippedDuplicates: number;
-  archivedSources: number;
-  reviewId?: string | null;
-  failed: number;
-  paused: boolean;
+  added: number;              // canciones nuevas aplicadas en local
+  skippedDuplicates: number;  // ya estaban en la lista destino
+  pendingId?: string | null;  // pendiente creado en la cola de subida
 }
 
 export interface MergePreviewSong {
