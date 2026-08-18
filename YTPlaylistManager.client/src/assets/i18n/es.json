@@ -198,7 +198,8 @@
     "moves_missing": "Estas listas ya no existen y se omitirán: {{lists}}",
     "discard_all_confirm": "¿Descartar TODOS los cambios pendientes ({{n}})? Se deshacen en local; no se toca YouTube.",
     "merges": "Uniones de listas ({{n}})",
-    "moves": "Cambios de canciones ({{n}})"
+    "moves": "Cambios de canciones ({{n}})",
+    "target_locked": "YouTube no permite modificar sus listas automáticas («{{title}}») desde apps. Recreá esas canciones en una lista tuya y descartá este cambio."
   },
   "cache": {
     "title": "Historial",

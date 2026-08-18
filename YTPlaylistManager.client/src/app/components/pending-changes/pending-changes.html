@@ -54,6 +54,12 @@
                 {{ 'pending.target_missing' | translate:{ title: pu.targetPlaylistTitle } }}
               </div>
             }
+            @if (pu.targetLocked) {
+              <div class="card danger pending__warning">
+                <i class="fa-solid fa-lock"></i>
+                {{ 'pending.target_locked' | translate:{ title: pu.targetPlaylistTitle } }}
+              </div>
+            }
             @if (pu.sourceTitles.length > 0) {
               <div class="muted danger pending__quota">
                 <i class="fa-solid fa-trash"></i> {{ 'playlists.pending_will_delete' | translate:{ sources: pu.sourceTitles.join(', ') } }}
@@ -73,7 +79,7 @@
               </div>
             </details>
             <div class="row row--actions">
-              @if (!pu.targetMissing) {
+              @if (!pu.targetMissing && !pu.targetLocked) {
               <button (click)="uploadMerge(pu)" [disabled]="busyId() !== null">
                 {{ (busyId() === pu.id ? 'playlists.uploading' : 'playlists.upload_button') | translate:{ quota: pu.estimatedQuotaUnits } }}
               </button>

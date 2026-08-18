@@ -84,8 +84,10 @@ export class PendingChanges implements OnDestroy {
             .pipe(timeout({ each: 120_000 }))
         );
         totalUploaded += r.uploaded;
-        if (r.targetMissing) {
-          this.error.set(this.translate.instant('pending.target_missing', { title: r.targetPlaylistTitle }));
+        if (r.targetMissing || r.targetLocked) {
+          this.error.set(this.translate.instant(
+            r.targetLocked ? 'pending.target_locked' : 'pending.target_missing',
+            { title: r.targetPlaylistTitle }));
           break;
         }
         if (r.paused || r.remainingPending === 0) {
@@ -150,7 +152,7 @@ export class PendingChanges implements OnDestroy {
       let paused = false;
       // Los pendientes cuya lista destino ya no existe se saltan: subirlos falla y solo
       // se pueden descartar (el aviso está en su tarjeta).
-      for (const pu of this.svc.uploads().filter((u) => !u.targetMissing)) {
+      for (const pu of this.svc.uploads().filter((u) => !u.targetMissing && !u.targetLocked)) {
         const total = pu.itemCount;
         let totalUploaded = 0;
         while (true) {
@@ -160,8 +162,10 @@ export class PendingChanges implements OnDestroy {
           );
           totalUploaded += r.uploaded;
           this.api.refreshQuota();
-          if (r.targetMissing) {
-            parts.push(this.translate.instant('pending.target_missing', { title: r.targetPlaylistTitle }));
+          if (r.targetMissing || r.targetLocked) {
+            parts.push(this.translate.instant(
+              r.targetLocked ? 'pending.target_locked' : 'pending.target_missing',
+              { title: r.targetPlaylistTitle }));
             paused = true;   // corta el recorrido: el resto se sube en otra pasada
             break;
           }

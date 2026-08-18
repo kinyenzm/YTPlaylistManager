@@ -134,7 +134,8 @@ public record PendingUploadDto(
     DateTime CreatedAtUtc,
     List<PendingUploadItemDto> Items,
     List<string> SourceTitles,   // listas origen que se borrarán de YouTube al subir
-    bool TargetMissing           // la lista destino ya no existe: solo se puede descartar
+    bool TargetMissing,          // la lista destino ya no existe: solo se puede descartar
+    bool TargetLocked            // lista automática de YouTube: la API no permite escribirla
 );
 
 public record UploadResultDto(
@@ -147,7 +148,8 @@ public record UploadResultDto(
     int RemainingPending,    // canciones que quedaron sin subir (si Paused)
     int DeletedSources = 0,  // listas origen borradas de YouTube
     int RemainingSources = 0,// listas origen que faltan borrar (si se cortó)
-    bool TargetMissing = false // la lista destino ya no existe: solo queda descartar
+    bool TargetMissing = false,// la lista destino ya no existe: solo queda descartar
+    bool TargetLocked = false  // lista automática de YouTube: la API no permite escribirla
 );
 
 // ── Asignar una canción a varias/una playlist (staged) ──

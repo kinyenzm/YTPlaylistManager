@@ -198,7 +198,8 @@
     "moves_missing": "These playlists no longer exist and will be skipped: {{lists}}",
     "discard_all_confirm": "Discard ALL pending changes ({{n}})? They're undone locally; YouTube isn't touched.",
     "merges": "Playlist merges ({{n}})",
-    "moves": "Song changes ({{n}})"
+    "moves": "Song changes ({{n}})",
+    "target_locked": "YouTube does not allow apps to modify its automatic playlists («{{title}}»). Recreate those songs in a playlist of your own and discard this change."
   },
   "cache": {
     "title": "History",

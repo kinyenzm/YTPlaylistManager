@@ -85,6 +85,10 @@ public class YouTubeService : IYouTubeService
     /// <summary>True solo si sabemos con certeza que la playlist ya no existe.</summary>
     private bool IsKnownMissing(string playlistId)
     {
+        // Las listas del canal (Favoritos, Ver más tarde, Me gusta, Mezcla) nunca aparecen
+        // en playlists.list?mine=true, así que faltar de la caché no prueba nada sobre
+        // ellas: existen, solo que por otra vía.
+        if (IsSpecialPlaylist(playlistId)) return false;
         var known = KnownPlaylistIds();
         return known is not null && !known.Contains(playlistId);
     }
@@ -514,6 +518,10 @@ public class YouTubeService : IYouTubeService
             throw new ArgumentException("TargetPlaylistId es requerido (merge SIEMPRE hacia una playlist existente).");
         if (req.SourcePlaylistIds is null || req.SourcePlaylistIds.Count == 0)
             throw new ArgumentException("SourcePlaylistIds no puede estar vacío.");
+        if (IsSpecialPlaylist(req.TargetPlaylistId))
+            throw new ArgumentException(
+                "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
+                "Me gusta) desde la API. Elegí otra lista destino.");
 
         var targetId = req.TargetPlaylistId;
         var cache = _cacheStore.Load();
@@ -621,6 +629,12 @@ public class YouTubeService : IYouTubeService
             ?? throw new ArgumentException("El cambio pendiente no existe (quizás ya se subió).");
         if (plan.UserKey != userKey)
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
+
+        // Las listas automáticas de YouTube (FL/WL/LL/RD) no admiten escritura por API desde
+        // 2016: el insert responde 404 aunque la lista exista y se vea en la web.
+        if (IsSpecialPlaylist(plan.TargetPlaylistId))
+            return new UploadResultDto(id, plan.TargetPlaylistId, plan.TargetPlaylistTitle,
+                0, 0, false, plan.Items.Count, 0, plan.Sources.Count, TargetMissing: false, TargetLocked: true);
 
         // Validación previa (0 cuota): si la lista destino ya no existe, cortar acá —
         // sin gastar unidades ni tocar la caché ni las listas origen. No es un error de
@@ -815,7 +829,8 @@ public class YouTubeService : IYouTubeService
                     p.Items.Count, (p.Items.Count + p.Sources.Count) * 50, p.CreatedAtUtc,
                 [.. p.Items.Select(i => new PendingUploadItemDto(i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists))],
                 [.. p.Sources.Select(s => s.Title)],
-                    known is not null && !known.Contains(p.TargetPlaylistId)))
+                    !IsSpecialPlaylist(p.TargetPlaylistId) && known is not null && !known.Contains(p.TargetPlaylistId),
+                    IsSpecialPlaylist(p.TargetPlaylistId)))
                ];
     }
 
@@ -1070,6 +1085,10 @@ public class YouTubeService : IYouTubeService
 
         if (!string.IsNullOrEmpty(req.TargetPlaylistId))
         {
+            if (IsSpecialPlaylist(req.TargetPlaylistId))
+                throw new ArgumentException(
+                    "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
+                    "Me gusta) desde la API. Elegí otra lista destino.");
             targetId = req.TargetPlaylistId;
             targetTitle = _cacheStore.Load()?.Playlists.FirstOrDefault(p => p.Id == targetId)?.Title ?? targetId;
         }
@@ -1118,7 +1137,7 @@ public class YouTubeService : IYouTubeService
             plan.Items.Count, plan.Items.Count * 50, plan.CreatedAtUtc,
             plan.Items.Select(i => new PendingUploadItemDto(
                 i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists)).ToList(),
-            [], false);
+            [], false, false);
     }
 
     /// <summary>

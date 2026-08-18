@@ -84,6 +84,7 @@ export interface PendingUpload {
   items: MergePreviewSong[];
   sourceTitles: string[];
   targetMissing: boolean;
+  targetLocked: boolean;
 }
 
 export interface UploadResult {
@@ -97,6 +98,7 @@ export interface UploadResult {
   deletedSources: number;
   remainingSources: number;
   targetMissing: boolean;
+  targetLocked: boolean;
 }
 
 export interface ClassifiedSong {
