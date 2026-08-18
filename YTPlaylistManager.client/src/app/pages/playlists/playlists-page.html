@@ -18,7 +18,7 @@
 
 <!-- Actualizar todo también bloquea la rejilla: las tarjetas viejas no deben
      quedar clicables mientras la caché se está reescribiendo. -->
-@if (loading() || refreshing()) {
+@if (loading() || refreshing() || merging()) {
   <app-skeleton-list variant="card" [count]="playlistsSorted().length || 6" />
 }
 
@@ -51,7 +51,7 @@
   </div>
 }
 
-@if (!loading() && !refreshing()) {
+@if (!loading() && !refreshing() && !merging()) {
 <div class="grid">
   @for (p of playlistsSorted(); track p.id) {
     <div class="card"
@@ -171,6 +171,3 @@
   </app-modal>
 }
 
-@if (merging()) {
-  <app-busy-overlay titleKey="playlists.merge_apply_title" descKey="playlists.merge_apply_desc" />
-}

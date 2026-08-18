@@ -6,7 +6,6 @@ import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import { PendingSongMove, PendingUpload } from '../../models/models';
-import { BusyOverlay } from '../ui/busy-overlay';
 import { EmptyState } from '../ui/empty-state';
 import { Modal } from '../ui/modal';
 
@@ -18,7 +17,7 @@ import { Modal } from '../ui/modal';
 @Component({
   selector: 'app-pending-changes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslateModule, BusyOverlay, EmptyState, Modal],
+  imports: [TranslateModule, EmptyState, Modal],
   templateUrl: './pending-changes.html',
 })
 export class PendingChanges implements OnDestroy {

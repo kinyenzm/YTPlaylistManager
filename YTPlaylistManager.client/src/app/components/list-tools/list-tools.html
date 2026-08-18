@@ -24,6 +24,10 @@
   </div>
 </div>
 
+@if (loadingDup()) {
+  <app-skeleton-list variant="option" [count]="4" />
+}
+
 @if (duplicates(); as dup) {
   <div class="card">
     <strong>{{ 'detail.dup_summary' | translate:{ count: dup.duplicateCount, total: dup.totalItems } }}</strong>
@@ -59,6 +63,10 @@
       </div>
     }
   </div>
+}
+
+@if (classifying()) {
+  <app-skeleton-list variant="option" [count]="3" />
 }
 
 @if (classification(); as cls) {

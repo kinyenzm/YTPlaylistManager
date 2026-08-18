@@ -9,7 +9,6 @@ import { AuthService } from '../../services/auth.service';
 import { PendingService } from '../../services/pending.service';
 import { RefreshAllService } from '../../services/refresh-all.service';
 import { Playlist, MergeResult, MergePreview } from '../../models/models';
-import { BusyOverlay } from '../../components/ui/busy-overlay';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Modal } from '../../components/ui/modal';
 import { SkeletonList } from '../../components/ui/skeleton-list';
@@ -17,7 +16,7 @@ import { SkeletonList } from '../../components/ui/skeleton-list';
 @Component({
   selector: 'app-playlists-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, TranslateModule, BusyOverlay, EmptyState, Modal, SkeletonList],
+  imports: [FormsModule, RouterLink, TranslateModule, EmptyState, Modal, SkeletonList],
   templateUrl: './playlists-page.html',
 })
 export class PlaylistsPage implements OnInit {

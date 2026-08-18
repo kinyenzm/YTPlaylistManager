@@ -14,6 +14,13 @@
       </div>
       <p class="muted modal__intro">{{ 'pending.intro' | translate }}</p>
 
+      @if (busyId() !== null) {
+        <div class="pending__busy" role="status">
+          <div class="progress indeterminate"><div class="bar"></div></div>
+          <span class="muted">{{ 'playlists.merge_busy_title' | translate }}</span>
+        </div>
+      }
+
       @if (msg(); as m) {
         <div class="card card--accent pending__note">{{ m }}</div>
       }
@@ -137,6 +144,3 @@
   </app-modal>
 }
 
-@if (busyId() !== null) {
-  <app-busy-overlay titleKey="playlists.merge_busy_title" descKey="playlists.merge_busy_desc" />
-}

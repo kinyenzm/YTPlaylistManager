@@ -29,6 +29,10 @@
       <button class="secondary" (click)="scan(true)" [disabled]="loading()">{{ 'cross.rescan' | translate }}</button>
     </div>
 
+    @if (loading()) {
+      <app-skeleton-list [count]="6" />
+    }
+
     @if (report(); as rep) {
       <p class="muted cross-org__summary">
         {{ 'cross.summary' | translate:{ scanned: rep.scanned, total: rep.totalPlaylists, groups: rep.totalGroups } }}
@@ -154,10 +158,6 @@
 
   @if (editingVideoId(); as vid) {
     <app-assign-modal [videoId]="vid" [title]="editingTitle()" [playlists]="allPlaylists()" (closed)="closeEditor()" />
-  }
-
-  @if (busy()) {
-    <app-busy-overlay [titleKey]="busyKey()" descKey="cross.busy_desc" />
   }
 
 }

@@ -27,7 +27,6 @@ import { AssignModal } from '../../components/assign-modal/assign-modal';
 import { ListTools } from '../../components/list-tools/list-tools';
 import { RecoverTab } from '../../components/recover-tab/recover-tab';
 import { SongCard } from '../../components/song-card/song-card';
-import { BusyOverlay } from '../../components/ui/busy-overlay';
 import { EmptyState } from '../../components/ui/empty-state';
 import { SkeletonList } from '../../components/ui/skeleton-list';
 
@@ -44,7 +43,7 @@ type Mode = 'repeated' | 'byList' | 'bySong' | 'recover';
   imports: [
     RouterLink, FormsModule, TranslateModule,
     AssignModal, ListTools, RecoverTab, SongCard,
-    BusyOverlay, EmptyState, SkeletonList,
+    EmptyState, SkeletonList,
   ],
   providers: [DraftsService],
   templateUrl: './cross-duplicates.html',
@@ -139,9 +138,6 @@ export class CrossDuplicates {
   protected readonly editingVideoId = signal<string | null>(null);
   protected readonly editingTitle = signal<string>('');
 
-  protected readonly busy = computed(() => this.loading() || (this.listTools()?.busy() ?? false));
-  // El rótulo dice qué está corriendo: escanear, buscar, limpiar o clasificar.
-  protected readonly busyKey = computed(() => this.listTools()?.busy() ? this.listTools()!.busyKey() : 'cross.busy_title');
 
   constructor() {
     // Cargas iniciales solo con sesión; al desconectar se limpia todo

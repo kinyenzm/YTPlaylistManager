@@ -6,6 +6,7 @@ import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
 import { PendingService } from '../../services/pending.service';
 import { ClassifyResult, DuplicateReport } from '../../models/models';
+import { SkeletonList } from '../ui/skeleton-list';
 
 /**
  * Herramientas de una lista: buscar y limpiar repetidas internas, y clasificar
@@ -14,7 +15,7 @@ import { ClassifyResult, DuplicateReport } from '../../models/models';
 @Component({
   selector: 'app-list-tools',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, SkeletonList],
   templateUrl: './list-tools.html',
 })
 export class ListTools {
@@ -37,13 +38,6 @@ export class ListTools {
   protected readonly aiMode = signal<'genre' | 'mood' | 'decade'>('genre');
   protected readonly stagedMsg = signal<string | null>(null);
   protected readonly aiError = signal<string | null>(null);
-
-  readonly busy = computed(() => this.loadingDup() || this.cleaning() || this.classifying());
-  readonly busyKey = computed(() => {
-    if (this.cleaning()) return 'detail.busy_cleaning';
-    if (this.classifying()) return 'detail.busy_classifying';
-    return 'detail.busy_finding';
-  });
 
   protected readonly classKeys = computed(() => {
     const c = this.classification();
