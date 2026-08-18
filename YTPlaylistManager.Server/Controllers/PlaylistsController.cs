@@ -8,7 +8,7 @@ namespace YTPlaylistManager.Server.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [RequireGoogleSession]
-public sealed class PlaylistsController(IYouTubeService youtube, IAiClassifier ai) : ControllerBase
+public sealed class PlaylistsController(IYouTubeService youtube, DuplicateService duplicates, IAiClassifier ai) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<List<PlaylistDto>>(StatusCodes.Status200OK)]
@@ -28,17 +28,17 @@ public sealed class PlaylistsController(IYouTubeService youtube, IAiClassifier a
     [HttpGet("{id}/duplicates")]
     [ProducesResponseType<DuplicateReportDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Duplicados(string id, CancellationToken ct)
-        => Ok(await youtube.FindDuplicatesAsync(id, ct));
+        => Ok(await duplicates.FindDuplicatesAsync(id, ct));
 
     [HttpGet("cross-duplicates")]
     [ProducesResponseType<CrossDuplicateReportDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> DuplicadosEntrePlaylists([FromQuery] bool refresh, CancellationToken ct)
-        => Ok(await youtube.FindCrossDuplicatesAsync(ct, refresh));
+        => Ok(await duplicates.FindCrossDuplicatesAsync(ct, refresh));
 
     [HttpPost("remove-duplicates")]
     [ProducesResponseType<RemoveDuplicatesResultDto>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> RemoverDuplicados([FromBody] RemoveDuplicatesRequest req, CancellationToken ct)
-        => Ok(await youtube.RemoveDuplicatesAsync(req, ct));
+    public IActionResult RemoverDuplicados([FromBody] RemoveDuplicatesRequest req)
+        => Ok(duplicates.RemoveDuplicates(req));
 
     [HttpPost("merge")]
     [ProducesResponseType<MergePlaylistsResultDto>(StatusCodes.Status200OK)]

@@ -8,7 +8,10 @@ namespace YTPlaylistManager.Server.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [RequireGoogleSession]
-public sealed class SongsController(ISongSearchService searchService, IYouTubeService youtube) : ControllerBase
+public sealed class SongsController(
+    ISongSearchService searchService,
+    SongMoveService songMoves,
+    RecoveryService recovery) : ControllerBase
 {
 
     /// <summary>
@@ -36,23 +39,23 @@ public sealed class SongsController(ISongSearchService searchService, IYouTubeSe
     [HttpPost("assign")]
     [ProducesResponseType<PendingSongMoveDto>(StatusCodes.Status200OK)]
     public IActionResult Assign([FromBody] AssignSongRequest req)
-        => Ok(youtube.StageSongAssignment(req));
+        => Ok(songMoves.StageSongAssignment(req));
 
     /// <summary>Playlists (ids) donde está la canción ahora (caché, 0 cuota).</summary>
     [HttpGet("{videoId}/locations")]
     [ProducesResponseType<List<string>>(StatusCodes.Status200OK)]
     public IActionResult Locations(string videoId)
-        => Ok(youtube.GetSongLocations(videoId));
+        => Ok(songMoves.GetSongLocations(videoId));
 
     /// <summary>Ubicaciones de varias canciones a la vez (videoId → ids de listas).</summary>
     [HttpPost("locations")]
     public IActionResult LocationsBatch([FromBody] List<string> videoIds)
-        => Ok(youtube.GetSongLocationsBatch(videoIds));
+        => Ok(songMoves.GetSongLocationsBatch(videoIds));
 
     /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist (staged).</summary>
     [HttpPost("remove-items")]
     public IActionResult RemoveItems([FromBody] RemoveItemsRequest req)
-        => Ok(new { staged = youtube.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
+        => Ok(new { staged = songMoves.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
 
     /// <summary>
     /// Canciones huérfanas: conocidas por la app pero fuera de todas las playlists
@@ -61,7 +64,7 @@ public sealed class SongsController(ISongSearchService searchService, IYouTubeSe
     [HttpGet("recoverable")]
     [ProducesResponseType<List<RecoverableSongDto>>(StatusCodes.Status200OK)]
     public IActionResult Recoverable()
-        => Ok(youtube.GetRecoverableSongs());
+        => Ok(recovery.GetRecoverableSongs());
 
     /// <summary>
     /// Encola la recuperación (lista existente o nueva) como pendiente de subida
@@ -70,34 +73,34 @@ public sealed class SongsController(ISongSearchService searchService, IYouTubeSe
     [HttpPost("recover")]
     [ProducesResponseType<PendingUploadDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Recover([FromBody] RecoverSongsRequest req, CancellationToken ct)
-        => Ok(await youtube.StageRecoveryAsync(req, ct));
+        => Ok(await recovery.StageRecoveryAsync(req, ct));
 
     [HttpGet("pending-moves")]
     [ProducesResponseType<List<PendingSongMoveDto>>(StatusCodes.Status200OK)]
     public IActionResult PendingMoves()
-        => Ok(youtube.GetPendingSongMoves());
+        => Ok(songMoves.GetPendingSongMoves());
 
     [HttpPost("pending-moves/{id}/upload")]
     [ProducesResponseType<SongMoveUploadResultDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadMove(string id, CancellationToken ct)
-        => Ok(await youtube.UploadSongMoveAsync(id, ct));
+        => Ok(await songMoves.UploadSongMoveAsync(id, ct));
 
     [HttpPost("pending-moves/upload-all")]
     [ProducesResponseType<SongMoveBulkResultDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadAllMoves(CancellationToken ct)
-        => Ok(await youtube.UploadAllSongMovesAsync(ct));
+        => Ok(await songMoves.UploadAllSongMovesAsync(ct));
 
     [HttpDelete("pending-moves/{id}")]
     public IActionResult DiscardMove(string id)
     {
-        youtube.DiscardSongMove(id);
+        songMoves.DiscardSongMove(id);
         return NoContent();
     }
 
     [HttpDelete("pending-moves")]
     public IActionResult DiscardAllMoves()
     {
-        youtube.DiscardAllSongMoves();
+        songMoves.DiscardAllSongMoves();
         return NoContent();
     }
 }

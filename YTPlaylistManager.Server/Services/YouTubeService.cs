@@ -1,10 +1,3 @@
-using System.Globalization;
-using System.Text;
-using System.Text.RegularExpressions;
-using Google.Apis.Auth.OAuth2;
-using Google.Apis.Auth.OAuth2.Flows;
-using Google.Apis.Auth.OAuth2.Responses;
-using Google.Apis.Services;
 using Google.Apis.YouTube.v3.Data;
 using YTPlaylistManager.Server.Domain.Entities;
 using YTPlaylistManager.Server.Domain.Exceptions;
@@ -12,111 +5,31 @@ using YTPlaylistManager.Server.DTOs;
 
 namespace YTPlaylistManager.Server.Services;
 
-public class YouTubeService : IYouTubeService
+/// <summary>
+/// Lectura de playlists (con caché y fallback) y el ciclo de unión: preview,
+/// staging local, subida reanudable y descarte. Duplicados, recuperación y
+/// reasignaciones viven en sus propios servicios.
+/// </summary>
+public sealed class YouTubeService(
+    YouTubeClientFactory clientFactory,
+    PlaylistCatalog catalog,
+    OperationLog log,
+    PlaylistCacheStore cacheStore,
+    PlaylistItemsCacheStore itemsCache,
+    ArchivedPlaylistsStore archivedStore,
+    MergeReviewStore reviewStore,
+    PendingUploadStore pendingUploads,
+    QuotaTracker quota,
+    ActivityBroadcaster activity,
+    PlaylistTouchStore touchStore,
+    ILogger<YouTubeService> logger) : IYouTubeService
 {
-    private readonly IConfiguration _cfg;
-    private readonly GoogleTokenStore _tokenStore;
-    private readonly OperationLog _log;
-    private readonly PlaylistCacheStore _cacheStore;
-    private readonly PlaylistItemsCacheStore _itemsCache;
-    private readonly ArchivedPlaylistsStore _archivedStore;
-    private readonly MergeReviewStore _reviewStore;
-    private readonly PendingUploadStore _pendingUploads;
-    private readonly PendingSongMoveStore _songMoves;
-    private readonly QuotaTracker _quota;
-    private readonly ActivityBroadcaster _activity;
-    private readonly PlaylistTouchStore _touchStore;
-    private readonly GoogleSessionValidator _session;
-    private readonly ILogger<YouTubeService> _logger;
-
-    public YouTubeService(
-        IConfiguration cfg,
-        GoogleTokenStore tokenStore,
-        OperationLog log,
-        PlaylistCacheStore cacheStore,
-        PlaylistItemsCacheStore itemsCache,
-        ArchivedPlaylistsStore archivedStore,
-        MergeReviewStore reviewStore,
-        PendingUploadStore pendingUploads,
-        PendingSongMoveStore songMoves,
-        QuotaTracker quota,
-        ActivityBroadcaster activity,
-        PlaylistTouchStore touchStore,
-        GoogleSessionValidator session,
-        ILogger<YouTubeService> logger)
-    {
-        _cfg = cfg;
-        _tokenStore = tokenStore;
-        _log = log;
-        _cacheStore = cacheStore;
-        _itemsCache = itemsCache;
-        _archivedStore = archivedStore;
-        _reviewStore = reviewStore;
-        _pendingUploads = pendingUploads;
-        _songMoves = songMoves;
-        _quota = quota;
-        _activity = activity;
-        _touchStore = touchStore;
-        _session = session;
-        _logger = logger;
-    }
-
-    private string? _userKey;
-
-    /// <summary>
-    /// Clave estable por cuenta. No gasta cuota. Se memoriza por request (el servicio
-    /// es Scoped): antes cada llamada releía el archivo del token y recalculaba el hash,
-    /// y una sola petición la consulta más de veinte veces.
-    /// </summary>
-    private string CurrentUserKey()
-    {
-        if (_userKey is not null) return _userKey;
-        var t = _tokenStore.Load();
-        // Preferencia: AccountId (channel id, estable entre logins). Fallback legado:
-        // refresh token — rota si Google emite uno nuevo y fragmenta los datos.
-        return _userKey = UserKeys.FromSeed(
-            !string.IsNullOrEmpty(t?.AccountId) ? t.AccountId : t?.RefreshToken ?? "anon");
-    }
-
-    /// <summary>Título de una playlist según la caché de la lista; el id si no está.</summary>
-    private string TitleOf(string playlistId) =>
-        _cacheStore.Load()?.Playlists.FirstOrDefault(p => p.Id == playlistId)?.Title ?? playlistId;
-
-    /// <summary>
-    /// Ids de playlists vigentes según la caché de la lista (0 cuota). Devuelve null si
-    /// la caché aún no existe: en ese caso NO se puede afirmar que una lista falte, así
-    /// que las validaciones deben dejar pasar en vez de bloquear por falta de datos.
-    /// </summary>
-    private HashSet<string>? KnownPlaylistIds()
-    {
-        var cache = _cacheStore.Load();
-        return cache is null ? null : cache.Playlists.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
-    }
-
-    /// <summary>True solo si sabemos con certeza que la playlist ya no existe.</summary>
-    private bool IsKnownMissing(string playlistId)
-    {
-        // Las listas del canal (Favoritos, Ver más tarde, Me gusta, Mezcla) nunca aparecen
-        // en playlists.list?mine=true, así que faltar de la caché no prueba nada sobre
-        // ellas: existen, solo que por otra vía.
-        if (IsSpecialPlaylist(playlistId)) return false;
-        var known = KnownPlaylistIds();
-        return known is not null && !known.Contains(playlistId);
-    }
-
-    // Playlists especiales de YouTube (FL=Favoritos, WL=Ver más tarde, LL=Me gusta, RD=Mezcla)
-    // que la API no permite borrar. Si una lista origen tiene este prefijo, la omitimos en lugar
-    // de dejar el pending bloqueado para siempre.
-    private static bool IsSpecialPlaylist(string id) =>
-        id.StartsWith("FL", StringComparison.Ordinal) ||
-        id.StartsWith("WL", StringComparison.Ordinal) ||
-        id.StartsWith("LL", StringComparison.Ordinal) ||
-        id.StartsWith("RD", StringComparison.Ordinal);
+    // ── Lectura de playlists ──
 
     /// <summary>Anota la última modificación local registrada (PlaylistTouchStore).</summary>
     private List<PlaylistDto> AnnotateTouched(List<PlaylistDto> source)
     {
-        var touched = _touchStore.LoadAll();
+        var touched = touchStore.LoadAll();
         if (touched.Count == 0) return source;
         return source
             .Select(p => touched.TryGetValue(p.Id, out var at) ? p with { LastModifiedUtc = at } : p)
@@ -126,7 +39,7 @@ public class YouTubeService : IYouTubeService
     /// <summary>Marca las playlists que son origen de un cambio pendiente (en cola de unir).</summary>
     private List<PlaylistDto> AnnotateQueued(List<PlaylistDto> source)
     {
-        var pending = _pendingUploads.LoadForUser(CurrentUserKey());
+        var pending = pendingUploads.LoadForUser(clientFactory.CurrentUserKey());
         if (pending.Count == 0) return source;
 
         var queued = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -142,7 +55,7 @@ public class YouTubeService : IYouTubeService
     /// <summary>Marca las playlists archivadas localmente y las quita si no se piden.</summary>
     private List<PlaylistDto> AnnotateArchived(List<PlaylistDto> source, bool includeArchived)
     {
-        var archived = _archivedStore.LoadAll();
+        var archived = archivedStore.LoadAll();
         if (archived.Count == 0) return source;
 
         var archivedById = archived.ToDictionary(a => a.Id);
@@ -153,37 +66,10 @@ public class YouTubeService : IYouTubeService
         return includeArchived ? annotated : annotated.Where(p => !p.IsArchived).ToList();
     }
 
-    private Google.Apis.YouTube.v3.YouTubeService BuildClient()
-    {
-        var token = _tokenStore.Load()
-            ?? throw new NotAuthenticatedException("No hay sesión Google activa. Visita /api/auth/login primero.");
-
-        // Flujo con DataStore: el access token renovado se persiste en vez de perderse
-        // al terminar la petición.
-        var flow = _session.CreateFlow();
-
-        var tokenResponse = new TokenResponse
-        {
-            AccessToken = token.AccessToken,
-            RefreshToken = token.RefreshToken,
-            ExpiresInSeconds = (long)Math.Max(0, (token.ExpiresAtUtc - DateTime.UtcNow).TotalSeconds),
-            IssuedUtc = DateTime.UtcNow.AddSeconds(-1),
-            Scope = token.Scope
-        };
-
-        var credential = new UserCredential(flow, "me", tokenResponse);
-
-        return new Google.Apis.YouTube.v3.YouTubeService(new BaseClientService.Initializer
-        {
-            HttpClientInitializer = credential,
-            ApplicationName = "YTPlaylistManager"
-        });
-    }
-
     public async Task<List<PlaylistDto>> GetMyPlaylistsAsync(CancellationToken ct = default, bool forceRefresh = false, bool includeArchived = false)
     {
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
+        var userKey = clientFactory.CurrentUserKey();
+        var cache = cacheStore.Load();
 
         // Caché de la misma cuenta y sin pedir refrescar → servimos del archivo (0 cuota).
         if (!forceRefresh && cache is not null && cache.UserKey == userKey)
@@ -191,7 +77,7 @@ public class YouTubeService : IYouTubeService
 
         try
         {
-            var yt = BuildClient();
+            var yt = clientFactory.BuildClient();
             var result = new List<PlaylistDto>();
             string? pageToken = null;
 
@@ -202,7 +88,7 @@ public class YouTubeService : IYouTubeService
                 req.MaxResults = 50;
                 req.PageToken = pageToken;
                 var resp = await req.ExecuteAsync(ct);
-                _quota.Add(1);
+                quota.Add(1);
 
                 foreach (var p in resp.Items)
                 {
@@ -220,7 +106,7 @@ public class YouTubeService : IYouTubeService
             } while (!string.IsNullOrEmpty(pageToken));
 
             var ordered = result.OrderBy(p => p.Title, StringComparer.OrdinalIgnoreCase).ToList();
-            _cacheStore.Save(new PlaylistCache { UserKey = userKey, CachedAtUtc = DateTime.UtcNow, Playlists = ordered });
+            cacheStore.Save(new PlaylistCache { UserKey = userKey, CachedAtUtc = DateTime.UtcNow, Playlists = ordered });
             return AnnotateTouched(AnnotateQueued(AnnotateArchived(ordered, includeArchived)));
         }
         catch (Google.GoogleApiException ex)
@@ -228,7 +114,7 @@ public class YouTubeService : IYouTubeService
             // API falló (cuota/red). Si hay caché de esta misma cuenta, la usamos en vez de romper.
             if (cache is not null && cache.UserKey == userKey)
             {
-                _logger.LogWarning(ex, "Fallo al listar playlists ({Status}); usando caché.", ex.HttpStatusCode);
+                logger.LogWarning(ex, "Fallo al listar playlists ({Status}); usando caché.", ex.HttpStatusCode);
                 return AnnotateTouched(AnnotateQueued(AnnotateArchived(cache.Playlists, includeArchived)));
             }
             throw;
@@ -237,28 +123,28 @@ public class YouTubeService : IYouTubeService
 
     public async Task<List<PlaylistItemDto>> GetPlaylistItemsAsync(string playlistId, CancellationToken ct = default, bool forceRefresh = false)
     {
-        var userKey = CurrentUserKey();
+        var userKey = clientFactory.CurrentUserKey();
 
         // Caché de items: si ya leímos esta playlist y no se pide refrescar → 0 cuota.
         if (!forceRefresh)
         {
-            var cached = _itemsCache.Load(userKey, playlistId);
+            var cached = itemsCache.Load(userKey, playlistId);
             if (cached is not null) return cached;
         }
 
         try
         {
-            var items = await FetchItemsAsync(BuildClient(), playlistId, ct);
-            _itemsCache.Save(userKey, playlistId, items);  // guardar para no re-leer
+            var items = await FetchItemsAsync(clientFactory.BuildClient(), playlistId, ct);
+            itemsCache.Save(userKey, playlistId, items);  // guardar para no re-leer
             return items;
         }
         catch (Google.GoogleApiException ex)
         {
             // API falló (cuota/red). Si hay caché de esta playlist, la usamos en vez de romper.
-            var cached = _itemsCache.Load(userKey, playlistId);
+            var cached = itemsCache.Load(userKey, playlistId);
             if (cached is not null)
             {
-                _logger.LogWarning(ex, "Items de {Playlist}: API falló ({Status}); usando caché.", playlistId, ex.HttpStatusCode);
+                logger.LogWarning(ex, "Items de {Playlist}: API falló ({Status}); usando caché.", playlistId, ex.HttpStatusCode);
                 return cached;
             }
             throw;
@@ -278,7 +164,7 @@ public class YouTubeService : IYouTubeService
             req.MaxResults = 50;
             req.PageToken = pageToken;
             var resp = await req.ExecuteAsync(ct);
-            _quota.Add(1);
+            quota.Add(1);
 
             foreach (var it in resp.Items)
             {
@@ -299,169 +185,44 @@ public class YouTubeService : IYouTubeService
         return result.OrderBy(x => x.Position).ToList();
     }
 
-    public async Task<DuplicateReportDto> FindDuplicatesAsync(string playlistId, CancellationToken ct = default)
+    /// <summary>Items de una lista SOLO desde caché (0 cuota, nunca toca YouTube). Vacío si no está cargada.</summary>
+    public List<PlaylistItemDto> GetCachedItems(string playlistId) =>
+        itemsCache.Load(clientFactory.CurrentUserKey(), playlistId) ?? [];
+
+    public async Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default)
     {
-        // El título es decorativo: si su fetch falla (cuota, 404, red) se usa el id
-        // como fallback en vez de tumbar toda la detección de duplicados.
-        var playlistTitle = playlistId;
-        try
-        {
-            var yt = BuildClient();
-            var playlistReq = yt.Playlists.List("snippet");
-            playlistReq.Id = playlistId;
-            var pResp = await playlistReq.ExecuteAsync(ct);
-            _quota.Add(1);
-            playlistTitle = pResp.Items.FirstOrDefault()?.Snippet.Title ?? playlistId;
-        }
-        catch (Google.GoogleApiException ex)
-        {
-            if (QuotaTracker.IsQuotaError(ex)) _quota.MarkExhausted();
-            _logger.LogWarning(ex, "No se pudo leer el título de {Playlist}; se usa el id.", playlistId);
-        }
+        // Refrescar es justamente ignorar la caché: antes se saltaba toda lista que ya
+        // tuviera items guardados, así que con la caché caliente el botón no hacía nada.
+        var playlists = await GetMyPlaylistsAsync(ct, forceRefresh: true);
 
-        // Detección precisa: re-leemos los items DESDE YouTube (no de la caché, que puede
-        // estar desincronizada por remociones locales no subidas). Esto refresca la caché.
-        // Si ESTO falla, la excepción sube al middleware global (403 cuota / 404 / etc.).
-        var items = await GetPlaylistItemsAsync(playlistId, ct, forceRefresh: true);
-
-        var groups = new List<DuplicateGroupDto>();
-
-        // Por videoId
-        foreach (var g in items
-                     .Where(x => !string.IsNullOrEmpty(x.VideoId) && !VideoAvailability.IsUnavailable(x.Title))
-                     .GroupBy(x => x.VideoId)
-                     .Where(g => g.Count() > 1))
-        {
-            groups.Add(new DuplicateGroupDto(g.Key, "videoId", g.OrderBy(x => x.Position).ToList()));
-        }
-
-        // Por título normalizado (capta "misma canción con distinto video"). Se colapsa a un
-        // representante por videoId: las copias exactas ya las cubre el grupo de arriba, y sin
-        // este colapso el caso «2 copias del video A + 1 del video B» escondía al B — sus
-        // compañeros de título quedaban "ya marcados" y un grupo de 1 se descartaba.
-        foreach (var g in items
-                     .Where(x => !string.IsNullOrEmpty(x.VideoId) && !VideoAvailability.IsUnavailable(x.Title))
-                     .GroupBy(x => Normalize(x.Title))
-                     .Where(g => !string.IsNullOrWhiteSpace(g.Key)))
-        {
-            var byVideo = g.OrderBy(x => x.Position).DistinctBy(x => x.VideoId).ToList();
-            if (byVideo.Count > 1)
-                groups.Add(new DuplicateGroupDto(g.Key, "normalizedTitle", byVideo));
-        }
-
-        var dupCount = groups.Sum(g => g.Items.Count - 1);
-
-        return new DuplicateReportDto(playlistId, playlistTitle, items.Count, dupCount, groups);
-    }
-
-    public async Task<CrossDuplicateReportDto> FindCrossDuplicatesAsync(CancellationToken ct = default, bool forceRefresh = false)
-    {
-        var playlists = await GetMyPlaylistsAsync(ct);
-
-        var map = new Dictionary<string, (string Title, Dictionary<string, string> Playlists)>();
-        int scanned = 0, failed = 0;
-        Google.GoogleApiException? lastError = null;
+        int itemsRefreshed = 0;
+        int playlistsRefreshed = 0;
+        int playlistsSkipped = 0;
+        int quotaUsed = 1;
 
         foreach (var pl in playlists)
         {
-            List<PlaylistItemDto> items;
             try
             {
-                items = await GetPlaylistItemsAsync(pl.Id, ct, forceRefresh);
-                scanned++;
+                var items = await GetPlaylistItemsAsync(pl.Id, ct, forceRefresh: true);
+                itemsRefreshed += items.Count;
+                playlistsRefreshed++;
+                // ~1u cada 50 items, redondeado arriba.
+                quotaUsed += Math.Max(1, (int)Math.Ceiling(items.Count / 50.0));
             }
             catch (Google.GoogleApiException ex)
             {
-                failed++;
-                lastError = ex;
-                _logger.LogWarning(ex, "No se pudo leer la playlist {Playlist} ({Status}); se omite.", pl.Id, ex.HttpStatusCode);
-                continue;
-            }
-
-            foreach (var it in items)
-            {
-                if (string.IsNullOrEmpty(it.VideoId)) continue;
-                if (VideoAvailability.IsUnavailable(it.Title)) continue;
-                if (!map.TryGetValue(it.VideoId, out var entry))
-                {
-                    entry = (it.Title, new Dictionary<string, string>());
-                    map[it.VideoId] = entry;
-                }
-                entry.Playlists[pl.Id] = pl.Title; // distinct por playlistId (Dictionary compartido por referencia)
+                playlistsSkipped++;
+                logger.LogWarning(ex, "No se pudo refrescar la playlist {Id}; se omite.", pl.Id);
+                if (QuotaTracker.IsQuotaError(ex)) break;   // sin cuota no tiene sentido seguir
             }
         }
 
-        // No se pudo leer NINGUNA playlist (típico: cuota agotada) → propagar el motivo real
-        // en vez de devolver "0 repetidos", que sería engañoso.
-        if (scanned == 0 && lastError is not null) throw lastError;
-
-        var groups = map
-            .Where(kv => kv.Value.Playlists.Count > 1)
-            .Select(kv => new CrossDuplicateDto(
-                kv.Key,
-                kv.Value.Title,
-                kv.Value.Playlists.Count,
-                kv.Value.Playlists.Select(p => new CrossPlaylistRefDto(p.Key, p.Value)).ToList()))
-            .OrderByDescending(g => g.PlaylistCount)
-            .ThenBy(g => g.Title, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return new CrossDuplicateReportDto(playlists.Count, groups.Count, groups, scanned, failed);
+        log.Add("RefreshAll", $"playlistsRefreshed={playlistsRefreshed} itemsRefreshed={itemsRefreshed} skipped={playlistsSkipped} quota~{quotaUsed}");
+        return new RefreshAllResultDto(playlistsRefreshed, itemsRefreshed, playlistsSkipped, quotaUsed);
     }
 
-    public async Task<RemoveDuplicatesResultDto> RemoveDuplicatesAsync(RemoveDuplicatesRequest req, CancellationToken ct = default)
-    {
-        var userKey = CurrentUserKey();
-
-        // LOCAL: operamos sobre la caché. Si la playlist no está cacheada no podemos
-        // deduplicar (no sabemos qué hay). El usuario debe abrir la playlist primero
-        // (lo que la cachea) y volver a intentar.
-        var items = _itemsCache.Load(userKey, req.PlaylistId);
-        if (items is null)
-        {
-            throw new InvalidOperationException(
-                "La playlist no está en caché. Abrila una vez desde la app para que se cargue y volvé a intentar.");
-        }
-
-        // Por título nunca se tocan los videos privados/eliminados (su título placeholder es
-        // idéntico entre canciones distintas) ni los títulos que normalizan a vacío:
-        // agruparlos borraría canciones reales que solo comparten el placeholder.
-        var untouchable = req.Strategy == "normalizedTitle"
-            ? items.Where(x => VideoAvailability.IsUnavailable(x.Title) || string.IsNullOrWhiteSpace(Normalize(x.Title))).ToList()
-            : [];
-        var untouchableIds = untouchable.Select(x => x.PlaylistItemId).ToHashSet(StringComparer.Ordinal);
-        var dedupable = items.Where(x => !untouchableIds.Contains(x.PlaylistItemId));
-
-        // Mantenemos el primero de cada grupo (menor Position), eliminamos el resto.
-        IEnumerable<IGrouping<string, PlaylistItemDto>> groups = req.Strategy == "normalizedTitle"
-            ? dedupable.GroupBy(x => Normalize(x.Title))
-            : dedupable.Where(x => !string.IsNullOrEmpty(x.VideoId)).GroupBy(x => x.VideoId);
-
-        var keepIds = new HashSet<string>();
-        var toKeep = new List<PlaylistItemDto>(untouchable);
-        int removed = 0;
-        int kept = 0;
-
-        foreach (var g in groups)
-        {
-            var ordered = g.OrderBy(x => x.Position).ToList();
-            if (ordered.Count == 0) continue;
-            var first = ordered[0];
-            toKeep.Add(first);
-            keepIds.Add(first.PlaylistItemId);
-            kept++;
-            removed += ordered.Count - 1;
-        }
-
-        // Reordenar por Position para que la lista se vea coherente.
-        toKeep = toKeep.OrderBy(x => x.Position).ToList();
-        kept = toKeep.Count;   // incluye las no deduplicables conservadas
-
-        _itemsCache.Save(userKey, req.PlaylistId, toKeep);
-        _touchStore.Touch(req.PlaylistId);
-        _log.Add("RemoveDuplicates", $"playlist={req.PlaylistId} strategy={req.Strategy} removed={removed} kept={kept} (local)");
-        return new RemoveDuplicatesResultDto(req.PlaylistId, removed, kept);
-    }
+    // ── Unión de playlists (local-first) ──
 
     private sealed class PreviewAccum(string title, string? channelTitle, string? thumbnailUrl)
     {
@@ -478,13 +239,12 @@ public class YouTubeService : IYouTubeService
     /// </summary>
     public MergePreviewDto PreviewMerge(MergePreviewRequest req)
     {
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
+        var userKey = clientFactory.CurrentUserKey();
         var targetId = req.TargetPlaylistId;
-        var targetTitle = TitleOf(targetId);
+        var targetTitle = catalog.TitleOf(targetId);
         var warnings = new List<string>();
 
-        var targetItems = _itemsCache.Load(userKey, targetId);
+        var targetItems = itemsCache.Load(userKey, targetId);
         if (targetItems is null)
             warnings.Add($"La lista destino «{targetTitle}» no está cargada; abrila o usá «Actualizar» para un cálculo exacto.");
 
@@ -499,8 +259,8 @@ public class YouTubeService : IYouTubeService
         foreach (var src in req.SourcePlaylistIds.Distinct())
         {
             if (src == targetId) continue;
-            var srcTitle = TitleOf(src);
-            var items = _itemsCache.Load(userKey, src);
+            var srcTitle = catalog.TitleOf(src);
+            var items = itemsCache.Load(userKey, src);
             if (items is null)
             {
                 warnings.Add($"La lista «{srcTitle}» no está cargada; abrila para incluirla en la vista previa.");
@@ -535,23 +295,22 @@ public class YouTubeService : IYouTubeService
 
     public Task<MergePlaylistsResultDto> MergePlaylistsAsync(MergePlaylistsRequest req, CancellationToken ct = default)
     {
-        var userKey = CurrentUserKey();
+        var userKey = clientFactory.CurrentUserKey();
 
         if (string.IsNullOrEmpty(req.TargetPlaylistId))
             throw new ArgumentException("TargetPlaylistId es requerido (merge SIEMPRE hacia una playlist existente).");
         if (req.SourcePlaylistIds is null || req.SourcePlaylistIds.Count == 0)
             throw new ArgumentException("SourcePlaylistIds no puede estar vacío.");
-        if (IsSpecialPlaylist(req.TargetPlaylistId))
+        if (PlaylistCatalog.IsSpecialPlaylist(req.TargetPlaylistId))
             throw new ArgumentException(
                 "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
                 "Me gusta) desde la API. Elegí otra lista destino.");
 
         var targetId = req.TargetPlaylistId;
-        var cache = _cacheStore.Load();
-        var targetTitle = TitleOf(targetId);
+        var targetTitle = catalog.TitleOf(targetId);
 
         // Unión EN LOCAL (0 cuota): trabajamos sobre la caché de items.
-        var targetItems = _itemsCache.Load(userKey, targetId) ?? new List<PlaylistItemDto>();
+        var targetItems = itemsCache.Load(userKey, targetId) ?? new List<PlaylistItemDto>();
         var existing = new HashSet<string>(
             targetItems.Where(i => !string.IsNullOrEmpty(i.VideoId)).Select(i => i.VideoId),
             StringComparer.Ordinal);
@@ -561,13 +320,13 @@ public class YouTubeService : IYouTubeService
         var byVideo = new Dictionary<string, PreviewAccum>(StringComparer.Ordinal);
         var sourcesUsed = new List<PendingSource>();
         int skipped = 0;
-        int nextPosition = targetItems.Count == 0 ? 0 : targetItems.Max(i => i.Position) + 1;
+        int nextPosition = PlaylistCatalog.NextPosition(targetItems);
 
         foreach (var src in req.SourcePlaylistIds.Distinct())
         {
             if (src == targetId) continue;
-            var srcTitle = TitleOf(src);
-            var items = _itemsCache.Load(userKey, src);
+            var srcTitle = catalog.TitleOf(src);
+            var items = itemsCache.Load(userKey, src);
             if (items is null) continue;   // lista origen no cargada → se omite (el preview avisa)
             sourcesUsed.Add(new PendingSource { Id = src, Title = srcTitle });
 
@@ -614,7 +373,7 @@ public class YouTubeService : IYouTubeService
         }
 
         if (newCacheItems.Count > 0)
-            _itemsCache.Save(userKey, targetId, targetItems.Concat(newCacheItems).ToList());
+            itemsCache.Save(userKey, targetId, targetItems.Concat(newCacheItems).ToList());
 
         int added = pendingItems.Count;
         string? pendingId = null;
@@ -623,7 +382,7 @@ public class YouTubeService : IYouTubeService
         if (added > 0 || sourcesUsed.Count > 0)
         {
             pendingId = Guid.NewGuid().ToString("N")[..12];
-            _pendingUploads.Add(new PendingUpload
+            pendingUploads.Add(new PendingUpload
             {
                 Id = pendingId,
                 UserKey = userKey,
@@ -633,729 +392,266 @@ public class YouTubeService : IYouTubeService
                 Sources = sourcesUsed,
                 CreatedAtUtc = DateTime.UtcNow,
             });
+            touchStore.Touch(targetId);
         }
 
-        if (added > 0 || sourcesUsed.Count > 0)
-            _touchStore.Touch(targetId);
-        _log.Add("Merge(local)", $"sources={string.Join(",", req.SourcePlaylistIds)} target={targetId} staged={added} skipped={skipped} pendingId={pendingId}");
+        log.Add("Merge(local)", $"sources={string.Join(",", req.SourcePlaylistIds)} target={targetId} staged={added} skipped={skipped} pendingId={pendingId}");
 
         return Task.FromResult(new MergePlaylistsResultDto(
             targetId, targetTitle, added, skipped, 0, pendingId, 0, false));
+    }
+
+    // ── Subida de pendientes ──
+
+    /// <summary>Resultado interno de la inserción de items de un plan.</summary>
+    private sealed class InsertOutcome
+    {
+        public int Uploaded;
+        public int Failed;
+        public bool Paused;
+        public bool TargetMissing;
+        public List<PendingUploadItem> Remaining = [];
+        public Dictionary<string, string> RealIdByLocal = new(StringComparer.Ordinal);  // localId -> id real
+        public HashSet<string> FailedLocalIds = new(StringComparer.Ordinal);
     }
 
     /// <summary>Sube a YouTube de verdad las canciones de un cambio pendiente (50u c/u).
     /// <paramref name="limit"/> limita el número de canciones a subir en esta llamada; sin valor sube todo.</summary>
     public async Task<UploadResultDto> UploadPendingAsync(string id, int? limit = null, CancellationToken ct = default)
     {
-        var userKey = CurrentUserKey();
-        var plan = _pendingUploads.Get(id)
+        var userKey = clientFactory.CurrentUserKey();
+        var plan = pendingUploads.Get(id)
             ?? throw new ArgumentException("El cambio pendiente no existe (quizás ya se subió).");
         if (plan.UserKey != userKey)
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
 
         // Las listas automáticas de YouTube (FL/WL/LL/RD) no admiten escritura por API desde
         // 2016: el insert responde 404 aunque la lista exista y se vea en la web.
-        if (IsSpecialPlaylist(plan.TargetPlaylistId))
+        if (PlaylistCatalog.IsSpecialPlaylist(plan.TargetPlaylistId))
             return new UploadResultDto(id, plan.TargetPlaylistId, plan.TargetPlaylistTitle,
                 0, 0, false, plan.Items.Count, 0, plan.Sources.Count, TargetMissing: false, TargetLocked: true);
 
         // Validación previa (0 cuota): si la lista destino ya no existe, cortar acá —
         // sin gastar unidades ni tocar la caché ni las listas origen. No es un error de
         // la petición sino un estado del mundo, así que se informa en el resultado.
-        if (IsKnownMissing(plan.TargetPlaylistId))
+        if (catalog.IsKnownMissing(plan.TargetPlaylistId))
             return new UploadResultDto(id, plan.TargetPlaylistId, plan.TargetPlaylistTitle,
                 0, 0, false, plan.Items.Count, 0, plan.Sources.Count, TargetMissing: true);
 
-        var yt = BuildClient();
+        var yt = clientFactory.BuildClient();
         var targetId = plan.TargetPlaylistId;
-        int uploaded = 0, failed = 0;
-        bool paused = false;
-        bool targetMissing = false;
-        var remaining = new List<PendingUploadItem>();
-        var realIdByLocal = new Dictionary<string, string>(StringComparer.Ordinal);  // localId -> id real de YouTube
-        var failedLocalIds = new HashSet<string>(StringComparer.Ordinal);
+
+        var insert = await InsertPendingItemsAsync(yt, plan, limit, ct);
+        ReconcileTargetCache(userKey, targetId, insert);
+        var (deletedSources, remainingSources, paused) =
+            await DeleteSourcesWhenCompleteAsync(yt, userKey, plan, insert, ct);
+
+        if (insert.Remaining.Count == 0 && remainingSources.Count == 0)
+        {
+            pendingUploads.Remove(id);
+        }
+        else
+        {
+            plan.Items = insert.Remaining;
+            plan.Sources = remainingSources;
+            pendingUploads.Replace(plan);
+        }
+
+        log.Add("Upload", $"pending={id} target={targetId} uploaded={insert.Uploaded} failed={insert.Failed} deletedSources={deletedSources} paused={paused} remItems={insert.Remaining.Count} remSources={remainingSources.Count} targetMissing={insert.TargetMissing}");
+
+        // YouTube respondió 404: la lista destino ya no existe. Se saca de la caché de
+        // listas para que el próximo listado de pendientes ya venga con TargetMissing y
+        // la UI oculte el botón de subir, en vez de chocar contra el mismo 404 cada vez.
+        if (insert.TargetMissing) catalog.RemoveFromListCache([targetId]);
+
+        return new UploadResultDto(id, targetId, plan.TargetPlaylistTitle, insert.Uploaded, insert.Failed, paused,
+            insert.Remaining.Count, deletedSources, remainingSources.Count, insert.TargetMissing);
+    }
+
+    /// <summary>Inserta las canciones del plan en la lista destino (50u c/u), hasta el límite.</summary>
+    private async Task<InsertOutcome> InsertPendingItemsAsync(
+        Google.Apis.YouTube.v3.YouTubeService yt, PendingUpload plan, int? limit, CancellationToken ct)
+    {
+        var r = new InsertOutcome();
         int processed = 0;
 
         foreach (var item in plan.Items)
         {
-            if (paused || targetMissing || (limit.HasValue && processed >= limit.Value)) { remaining.Add(item); continue; }
+            if (r.Paused || r.TargetMissing || (limit.HasValue && processed >= limit.Value)) { r.Remaining.Add(item); continue; }
             try
             {
                 var inserted = await yt.PlaylistItems.Insert(new PlaylistItem
                 {
                     Snippet = new PlaylistItemSnippet
                     {
-                        PlaylistId = targetId,
+                        PlaylistId = plan.TargetPlaylistId,
                         ResourceId = new ResourceId { Kind = "youtube#video", VideoId = item.VideoId },
                     },
                 }, "snippet").ExecuteAsync(ct);
-                _quota.Add(50);
-                _activity.Publish(new ActivityEvent("insert", item.Title, plan.TargetPlaylistTitle, item.VideoId, DateTime.UtcNow));
-                realIdByLocal[item.LocalItemId] = inserted.Id;
-                uploaded++;
+                quota.Add(50);
+                activity.Publish(new ActivityEvent("insert", item.Title, plan.TargetPlaylistTitle, item.VideoId, DateTime.UtcNow));
+                r.RealIdByLocal[item.LocalItemId] = inserted.Id;
+                r.Uploaded++;
                 processed++;
             }
             catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex))
             {
-                _quota.MarkExhausted();
-                paused = true;
-                remaining.Add(item);
+                quota.MarkExhausted();
+                r.Paused = true;
+                r.Remaining.Add(item);
             }
             catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 // Target inexistente (borrado después de encolar): abortar TODO el plan en
                 // vez de iterar fallando item por item; el resto queda pendiente y las
                 // fuentes NO se tocan.
-                _logger.LogWarning(ex, "Target {Target} no existe; se aborta la subida del pendiente {Id}.", targetId, id);
-                targetMissing = true;
-                remaining.Add(item);
+                logger.LogWarning(ex, "Target {Target} no existe; se aborta la subida del pendiente {Id}.", plan.TargetPlaylistId, plan.Id);
+                r.TargetMissing = true;
+                r.Remaining.Add(item);
             }
             catch (Google.GoogleApiException ex)
             {
-                _logger.LogWarning(ex, "No se pudo subir {Video} a {Target}.", item.VideoId, targetId);
-                failedLocalIds.Add(item.LocalItemId);
-                failed++;
+                logger.LogWarning(ex, "No se pudo subir {Video} a {Target}.", item.VideoId, plan.TargetPlaylistId);
+                r.FailedLocalIds.Add(item.LocalItemId);
+                r.Failed++;
                 processed++;
             }
         }
 
-        // Actualizar la caché del target EN EL LUGAR (sin leer de YouTube): cambiar los ids
-        // sintéticos por los reales del insert y quitar las que fallaron.
-        if (realIdByLocal.Count > 0 || failedLocalIds.Count > 0)
-        {
-            var cached = _itemsCache.Load(userKey, targetId);
-            if (cached is not null)
-            {
-                var updated = cached
-                    .Where(i => !failedLocalIds.Contains(i.PlaylistItemId))
-                    .Select(i => realIdByLocal.TryGetValue(i.PlaylistItemId, out var realId)
-                        ? i with { PlaylistItemId = realId }
-                        : i)
-                    .ToList();
-                _itemsCache.Save(userKey, targetId, updated);
-            }
-        }
-
-        // Borrar las listas origen de YouTube SOLO cuando TODAS las canciones se subieron
-        // de verdad: sin restantes, sin fallos y con el target vivo. Un plan con fallos
-        // queda pendiente (descartable a mano) — nunca se borra una fuente sin haber
-        // copiado su contenido.
-        int deletedSources = 0;
-        var remainingSources = plan.Sources;
-        if (remaining.Count == 0 && failed == 0 && !targetMissing && plan.Sources.Count > 0)
-        {
-            var stillPending = new List<PendingSource>();
-            var deletedIds = new List<string>();
-            var archivedEntries = new List<ArchivedPlaylistEntry>();
-            foreach (var s in plan.Sources)
-            {
-                if (paused) { stillPending.Add(s); continue; }
-                // Playlists especiales (FL/WL/LL/RD): la API de YouTube no permite borrarlas.
-                // Las consideramos "completadas" para que el pending no quede bloqueado.
-                if (IsSpecialPlaylist(s.Id))
-                {
-                    _logger.LogWarning("Lista origen {Id} ({Title}) es especial de YouTube y no se puede borrar via API; se omite.", s.Id, s.Title);
-                    _itemsCache.Invalidate(userKey, s.Id);
-                    continue;
-                }
-                var songsCount = _itemsCache.Load(userKey, s.Id)?.Count ?? 0;
-                try
-                {
-                    await yt.Playlists.Delete(s.Id).ExecuteAsync(ct);
-                    _quota.Add(50);
-                    _activity.Publish(new ActivityEvent("delete-list", s.Title, "", "", DateTime.UtcNow));
-                    deletedIds.Add(s.Id);
-                    archivedEntries.Add(new ArchivedPlaylistEntry
-                    {
-                        Id = s.Id,
-                        Title = s.Title,
-                        ArchivedAtUtc = DateTime.UtcNow,
-                        MergedIntoPlaylistId = targetId,
-                        MergedIntoPlaylistTitle = plan.TargetPlaylistTitle,
-                        SongsCount = songsCount,
-                    });
-                    _itemsCache.Invalidate(userKey, s.Id);
-                }
-                catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex))
-                {
-                    _quota.MarkExhausted();
-                    paused = true;
-                    stillPending.Add(s);
-                }
-                catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-                {
-                    deletedIds.Add(s.Id);   // ya no existía → la damos por borrada
-                    archivedEntries.Add(new ArchivedPlaylistEntry
-                    {
-                        Id = s.Id,
-                        Title = s.Title,
-                        ArchivedAtUtc = DateTime.UtcNow,
-                        MergedIntoPlaylistId = targetId,
-                        MergedIntoPlaylistTitle = plan.TargetPlaylistTitle,
-                        SongsCount = songsCount,
-                    });
-                    _itemsCache.Invalidate(userKey, s.Id);
-                }
-                catch (Google.GoogleApiException ex)
-                {
-                    _logger.LogWarning(ex, "No se pudo borrar la lista origen {Source}.", s.Id);
-                    stillPending.Add(s);
-                }
-            }
-            deletedSources = deletedIds.Count;
-            remainingSources = stillPending;
-            if (archivedEntries.Count > 0) _archivedStore.Add(archivedEntries);
-            RemoveFromPlaylistListCache(deletedIds);
-        }
-
-        if (remaining.Count == 0 && remainingSources.Count == 0)
-        {
-            _pendingUploads.Remove(id);
-        }
-        else
-        {
-            plan.Items = remaining;
-            plan.Sources = remainingSources;
-            _pendingUploads.Replace(plan);
-        }
-
-        _log.Add("Upload", $"pending={id} target={targetId} uploaded={uploaded} failed={failed} deletedSources={deletedSources} paused={paused} remItems={remaining.Count} remSources={remainingSources.Count} targetMissing={targetMissing}");
-
-        // YouTube respondió 404: la lista destino ya no existe. Se saca de la caché de
-        // listas para que el próximo listado de pendientes ya venga con TargetMissing y
-        // la UI oculte el botón de subir, en vez de chocar contra el mismo 404 cada vez.
-        if (targetMissing) RemoveFromPlaylistListCache([targetId]);
-
-        return new UploadResultDto(id, targetId, plan.TargetPlaylistTitle, uploaded, failed, paused,
-            remaining.Count, deletedSources, remainingSources.Count, targetMissing);
+        return r;
     }
 
-    /// <summary>Quita playlists de la caché de la lista (tras borrarlas en YouTube).</summary>
-    private void RemoveFromPlaylistListCache(IEnumerable<string> ids)
+    /// <summary>
+    /// Actualiza la caché del target EN EL LUGAR (sin leer de YouTube): cambia los ids
+    /// sintéticos por los reales del insert y quita los que fallaron.
+    /// </summary>
+    private void ReconcileTargetCache(string userKey, string targetId, InsertOutcome insert)
     {
-        var idSet = ids.ToHashSet(StringComparer.Ordinal);
-        if (idSet.Count == 0) return;
-        var cache = _cacheStore.Load();
-        if (cache is null) return;
-        var filtered = cache.Playlists.Where(p => !idSet.Contains(p.Id)).ToList();
-        if (filtered.Count != cache.Playlists.Count)
-            _cacheStore.Save(new PlaylistCache { UserKey = cache.UserKey, CachedAtUtc = cache.CachedAtUtc, Playlists = filtered });
+        if (insert.RealIdByLocal.Count == 0 && insert.FailedLocalIds.Count == 0) return;
+        var cached = itemsCache.Load(userKey, targetId);
+        if (cached is null) return;
+
+        var updated = cached
+            .Where(i => !insert.FailedLocalIds.Contains(i.PlaylistItemId))
+            .Select(i => insert.RealIdByLocal.TryGetValue(i.PlaylistItemId, out var realId)
+                ? i with { PlaylistItemId = realId }
+                : i)
+            .ToList();
+        itemsCache.Save(userKey, targetId, updated);
+    }
+
+    /// <summary>
+    /// Borra las listas origen de YouTube SOLO cuando TODAS las canciones se subieron de
+    /// verdad: sin restantes, sin fallos y con el target vivo. Un plan con fallos queda
+    /// pendiente (descartable a mano) — nunca se borra una fuente sin haber copiado su
+    /// contenido.
+    /// </summary>
+    private async Task<(int Deleted, List<PendingSource> Remaining, bool Paused)> DeleteSourcesWhenCompleteAsync(
+        Google.Apis.YouTube.v3.YouTubeService yt, string userKey, PendingUpload plan, InsertOutcome insert, CancellationToken ct)
+    {
+        bool paused = insert.Paused;
+        if (insert.Remaining.Count != 0 || insert.Failed != 0 || insert.TargetMissing || plan.Sources.Count == 0)
+            return (0, plan.Sources, paused);
+
+        var stillPending = new List<PendingSource>();
+        var deletedIds = new List<string>();
+        var archivedEntries = new List<ArchivedPlaylistEntry>();
+
+        ArchivedPlaylistEntry Archived(PendingSource s, int songsCount) => new()
+        {
+            Id = s.Id,
+            Title = s.Title,
+            ArchivedAtUtc = DateTime.UtcNow,
+            MergedIntoPlaylistId = plan.TargetPlaylistId,
+            MergedIntoPlaylistTitle = plan.TargetPlaylistTitle,
+            SongsCount = songsCount,
+        };
+
+        foreach (var s in plan.Sources)
+        {
+            if (paused) { stillPending.Add(s); continue; }
+            // Playlists especiales (FL/WL/LL/RD): la API de YouTube no permite borrarlas.
+            // Las consideramos "completadas" para que el pending no quede bloqueado.
+            if (PlaylistCatalog.IsSpecialPlaylist(s.Id))
+            {
+                logger.LogWarning("Lista origen {Id} ({Title}) es especial de YouTube y no se puede borrar via API; se omite.", s.Id, s.Title);
+                itemsCache.Invalidate(userKey, s.Id);
+                continue;
+            }
+            var songsCount = itemsCache.Load(userKey, s.Id)?.Count ?? 0;
+            try
+            {
+                await yt.Playlists.Delete(s.Id).ExecuteAsync(ct);
+                quota.Add(50);
+                activity.Publish(new ActivityEvent("delete-list", s.Title, "", "", DateTime.UtcNow));
+                deletedIds.Add(s.Id);
+                archivedEntries.Add(Archived(s, songsCount));
+                itemsCache.Invalidate(userKey, s.Id);
+            }
+            catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex))
+            {
+                quota.MarkExhausted();
+                paused = true;
+                stillPending.Add(s);
+            }
+            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                deletedIds.Add(s.Id);   // ya no existía → la damos por borrada
+                archivedEntries.Add(Archived(s, songsCount));
+                itemsCache.Invalidate(userKey, s.Id);
+            }
+            catch (Google.GoogleApiException ex)
+            {
+                logger.LogWarning(ex, "No se pudo borrar la lista origen {Source}.", s.Id);
+                stillPending.Add(s);
+            }
+        }
+
+        if (archivedEntries.Count > 0) archivedStore.Add(archivedEntries);
+        catalog.RemoveFromListCache(deletedIds);
+        return (deletedIds.Count, stillPending, paused);
     }
 
     public List<PendingUploadDto> GetPendingUploads()
     {
-        var userKey = CurrentUserKey();
-        var known = KnownPlaylistIds();
-        return [.. _pendingUploads.LoadForUser(userKey)
+        var userKey = clientFactory.CurrentUserKey();
+        var known = catalog.KnownPlaylistIds();
+        return [.. pendingUploads.LoadForUser(userKey)
                 .Select(p => new PendingUploadDto(
                     p.Id, p.TargetPlaylistId, p.TargetPlaylistTitle,
                     p.Items.Count, (p.Items.Count + p.Sources.Count) * 50, p.CreatedAtUtc,
                 [.. p.Items.Select(i => new PendingUploadItemDto(i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists))],
                 [.. p.Sources.Select(s => s.Title)],
-                    !IsSpecialPlaylist(p.TargetPlaylistId) && known is not null && !known.Contains(p.TargetPlaylistId),
-                    IsSpecialPlaylist(p.TargetPlaylistId)))
+                    !PlaylistCatalog.IsSpecialPlaylist(p.TargetPlaylistId) && known is not null && !known.Contains(p.TargetPlaylistId),
+                    PlaylistCatalog.IsSpecialPlaylist(p.TargetPlaylistId)))
                ];
     }
 
     /// <summary>Descarta un cambio pendiente y revierte la unión local del target.</summary>
     public void DiscardPending(string id)
     {
-        var userKey = CurrentUserKey();
-        var plan = _pendingUploads.Get(id);
+        var userKey = clientFactory.CurrentUserKey();
+        var plan = pendingUploads.Get(id);
         if (plan is null) return;
         if (plan.UserKey != userKey && plan.Items.Count > 0)
             throw new NotAuthenticatedException("Ese cambio pendiente es de otra cuenta.");
 
         var localIds = plan.Items.Select(i => i.LocalItemId).ToHashSet(StringComparer.Ordinal);
-        var targetItems = _itemsCache.Load(userKey, plan.TargetPlaylistId);
+        var targetItems = itemsCache.Load(userKey, plan.TargetPlaylistId);
         if (targetItems is not null)
-            _itemsCache.Save(userKey, plan.TargetPlaylistId,
+            itemsCache.Save(userKey, plan.TargetPlaylistId,
                 targetItems.Where(i => !localIds.Contains(i.PlaylistItemId)).ToList());
 
-        _pendingUploads.Remove(id);
-        _log.Add("DiscardPending", $"pending={id} target={plan.TargetPlaylistId} reverted={plan.Items.Count}");
+        pendingUploads.Remove(id);
+        log.Add("DiscardPending", $"pending={id} target={plan.TargetPlaylistId} reverted={plan.Items.Count}");
     }
 
-    // ── Asignar una canción a playlists (staged: local → pendiente → subir) ──
-
-    /// <summary>Playlists de la cuenta que contienen el videoId, con su playlistItemId (solo caché).</summary>
-    private Dictionary<string, (string Title, string ItemId)> CurrentSongLocations(string userKey, string videoId)
-    {
-        var map = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
-        var cache = _cacheStore.Load();
-        if (cache?.Playlists is null) return map;
-        foreach (var pl in cache.Playlists)
-        {
-            var items = _itemsCache.Load(userKey, pl.Id);
-            var hit = items?.FirstOrDefault(i => i.VideoId == videoId);
-            if (hit is not null) map[pl.Id] = (pl.Title, hit.PlaylistItemId);
-        }
-        return map;
-    }
-
-    private PendingSongMoveDto ToDto(PendingSongMove m)
-    {
-        // Listas involucradas que ya no existen: se informan para que el panel lo avise;
-        // al subir se omiten en vez de contarse como fallo.
-        var known = KnownPlaylistIds();
-        var missing = known is null
-            ? []
-            : m.AddTo.Select(a => (a.PlaylistId, a.PlaylistTitle))
-                .Concat(m.RemoveFrom.Select(r => (r.PlaylistId, r.PlaylistTitle)))
-                .Where(x => !known.Contains(x.Item1))
-                .Select(x => x.Item2)
-                .Distinct()
-                .ToList();
-
-        return new PendingSongMoveDto(
-            m.Id, m.VideoId, m.Title, m.ThumbnailUrl,
-            m.AddTo.Select(a => a.PlaylistTitle).ToList(),
-            m.RemoveFrom.Select(r => r.PlaylistTitle).ToList(),
-            (m.AddTo.Count + m.RemoveFrom.Count) * 50,
-            m.CreatedAtUtc,
-            missing);
-    }
-
-    /// <summary>Aplica en local la reasignación (agregar/quitar) y la deja pendiente de subir.</summary>
-    public PendingSongMoveDto? StageSongAssignment(AssignSongRequest req)
-    {
-        if (string.IsNullOrEmpty(req.VideoId)) throw new ArgumentException("VideoId requerido.");
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
-        var titleById = cache?.Playlists?.ToDictionary(p => p.Id, p => p.Title) ?? new();
-
-        var current = CurrentSongLocations(userKey, req.VideoId);
-        var desired = new HashSet<string>(req.DesiredPlaylistIds ?? [], StringComparer.Ordinal);
-
-        var addTo = new List<SongMoveTarget>();
-        var removeFrom = new List<SongMoveRemoval>();
-
-        foreach (var pid in desired)
-        {
-            if (current.ContainsKey(pid)) continue;
-            addTo.Add(new SongMoveTarget
-            {
-                PlaylistId = pid,
-                PlaylistTitle = titleById.GetValueOrDefault(pid, pid),
-                LocalItemId = $"pending-{Guid.NewGuid():N}",
-            });
-        }
-        foreach (var (pid, info) in current)
-        {
-            if (desired.Contains(pid)) continue;
-            removeFrom.Add(new SongMoveRemoval { PlaylistId = pid, PlaylistTitle = info.Title, PlaylistItemId = info.ItemId });
-        }
-
-        if (addTo.Count == 0 && removeFrom.Count == 0) return null;
-
-        // Aplicar en LOCAL: agregar items sintéticos / quitar de la caché.
-        foreach (var t in addTo)
-        {
-            var items = _itemsCache.Load(userKey, t.PlaylistId) ?? new List<PlaylistItemDto>();
-            int pos = items.Count == 0 ? 0 : items.Max(i => i.Position) + 1;
-            _itemsCache.Save(userKey, t.PlaylistId,
-                items.Append(new PlaylistItemDto(t.LocalItemId, req.VideoId, req.Title, req.ChannelTitle, pos, req.ThumbnailUrl)).ToList());
-        }
-        foreach (var r in removeFrom)
-        {
-            var items = _itemsCache.Load(userKey, r.PlaylistId);
-            if (items is null) continue;
-            _itemsCache.Save(userKey, r.PlaylistId, items.Where(i => i.PlaylistItemId != r.PlaylistItemId).ToList());
-        }
-
-        var move = new PendingSongMove
-        {
-            Id = Guid.NewGuid().ToString("N")[..12],
-            UserKey = userKey,
-            VideoId = req.VideoId,
-            Title = req.Title,
-            ChannelTitle = req.ChannelTitle,
-            ThumbnailUrl = req.ThumbnailUrl,
-            AddTo = addTo,
-            RemoveFrom = removeFrom,
-            CreatedAtUtc = DateTime.UtcNow,
-        };
-        _songMoves.Add(move);
-        _touchStore.Touch(addTo.Select(t => t.PlaylistId).Concat(removeFrom.Select(r => r.PlaylistId)));
-        _log.Add("SongAssign(local)", $"video={req.VideoId} add={addTo.Count} remove={removeFrom.Count} id={move.Id}");
-        return ToDto(move);
-    }
-
-    public List<PendingSongMoveDto> GetPendingSongMoves() =>
-        _songMoves.LoadForUser(CurrentUserKey()).Select(ToDto).ToList();
-
-    /// <summary>Sube a YouTube la reasignación: inserta en AddTo y borra de RemoveFrom (parcial/reanudable).</summary>
-    public async Task<SongMoveUploadResultDto> UploadSongMoveAsync(string id, CancellationToken ct = default)
-    {
-        var userKey = CurrentUserKey();
-        var move = _songMoves.Get(id) ?? throw new ArgumentException("El cambio no existe (quizás ya se subió).");
-        if (move.UserKey != userKey) throw new NotAuthenticatedException("Ese cambio es de otra cuenta.");
-
-        var yt = BuildClient();
-        int added = 0, removed = 0, failed = 0;
-        bool paused = false;
-        var addRem = new List<SongMoveTarget>();
-        var remRem = new List<SongMoveRemoval>();
-        var realIdByLocal = new Dictionary<string, string>(StringComparer.Ordinal);
-        var known = KnownPlaylistIds();
-
-        foreach (var t in move.AddTo)
-        {
-            if (paused) { addRem.Add(t); continue; }
-            // Lista destino borrada: se omite en silencio (no es un fallo del usuario) y
-            // se saca de la operación para que el pendiente pueda completarse.
-            if (known is not null && !known.Contains(t.PlaylistId))
-            {
-                _logger.LogWarning("Lista {Pl} ya no existe; se omite el alta de {Video}.", t.PlaylistId, move.VideoId);
-                continue;
-            }
-            try
-            {
-                var inserted = await yt.PlaylistItems.Insert(new PlaylistItem
-                {
-                    Snippet = new PlaylistItemSnippet { PlaylistId = t.PlaylistId, ResourceId = new ResourceId { Kind = "youtube#video", VideoId = move.VideoId } },
-                }, "snippet").ExecuteAsync(ct);
-                _quota.Add(50);
-                _activity.Publish(new ActivityEvent("insert", move.Title, t.PlaylistTitle, move.VideoId, DateTime.UtcNow));
-                realIdByLocal[t.LocalItemId] = inserted.Id;
-                added++;
-            }
-            catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; addRem.Add(t); }
-            catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo agregar {Video} a {Pl}.", move.VideoId, t.PlaylistId); failed++; }
-        }
-        foreach (var r in move.RemoveFrom)
-        {
-            if (paused) { remRem.Add(r); continue; }
-            // Si la lista entera ya no existe, la canción tampoco está en ella: hecho.
-            if (known is not null && !known.Contains(r.PlaylistId)) { removed++; continue; }
-            try
-            {
-                await yt.PlaylistItems.Delete(r.PlaylistItemId).ExecuteAsync(ct);
-                _quota.Add(50);
-                _activity.Publish(new ActivityEvent("delete", move.Title, r.PlaylistTitle, move.VideoId, DateTime.UtcNow));
-                removed++;
-            }
-            catch (Google.GoogleApiException ex) when (QuotaTracker.IsQuotaError(ex)) { _quota.MarkExhausted(); paused = true; remRem.Add(r); }
-            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound) { removed++; }
-            catch (Google.GoogleApiException ex) { _logger.LogWarning(ex, "No se pudo quitar {Item} de {Pl}.", r.PlaylistItemId, r.PlaylistId); failed++; }
-        }
-
-        // Sincronizar ids reales en la caché de las playlists donde se agregó.
-        foreach (var t in move.AddTo)
-        {
-            if (!realIdByLocal.TryGetValue(t.LocalItemId, out var realId)) continue;
-            var items = _itemsCache.Load(userKey, t.PlaylistId);
-            if (items is null) continue;
-            _itemsCache.Save(userKey, t.PlaylistId,
-                items.Select(i => i.PlaylistItemId == t.LocalItemId ? i with { PlaylistItemId = realId } : i).ToList());
-        }
-
-        int remainingOps = addRem.Count + remRem.Count;
-        if (remainingOps == 0) _songMoves.Remove(id);
-        else { move.AddTo = addRem; move.RemoveFrom = remRem; _songMoves.Replace(move); }
-
-        _log.Add("SongAssign(upload)", $"id={id} video={move.VideoId} added={added} removed={removed} failed={failed} paused={paused} rem={remainingOps}");
-        return new SongMoveUploadResultDto(id, move.VideoId, added, removed, failed, paused, remainingOps);
-    }
-
-    /// <summary>Descarta la reasignación y revierte el cambio local.</summary>
-    public void DiscardSongMove(string id)
-    {
-        var userKey = CurrentUserKey();
-        var move = _songMoves.Get(id);
-        if (move is null) return;
-        if (move.UserKey != userKey) throw new NotAuthenticatedException("Ese cambio es de otra cuenta.");
-
-        foreach (var t in move.AddTo)
-        {
-            var items = _itemsCache.Load(userKey, t.PlaylistId);
-            if (items is null) continue;
-            _itemsCache.Save(userKey, t.PlaylistId, items.Where(i => i.PlaylistItemId != t.LocalItemId).ToList());
-        }
-        foreach (var r in move.RemoveFrom)
-        {
-            var items = _itemsCache.Load(userKey, r.PlaylistId) ?? new List<PlaylistItemDto>();
-            if (items.Any(i => i.PlaylistItemId == r.PlaylistItemId)) continue;
-            int pos = items.Count == 0 ? 0 : items.Max(i => i.Position) + 1;
-            _itemsCache.Save(userKey, r.PlaylistId,
-                items.Append(new PlaylistItemDto(r.PlaylistItemId, move.VideoId, move.Title, move.ChannelTitle, pos, move.ThumbnailUrl)).ToList());
-        }
-        _songMoves.Remove(id);
-        _log.Add("SongAssign(discard)", $"id={id} video={move.VideoId}");
-    }
-
-    /// <summary>Playlists (ids) donde está actualmente la canción (solo caché, 0 cuota).</summary>
-    public List<string> GetSongLocations(string videoId) =>
-        GetSongLocationsBatch([videoId]).GetValueOrDefault(videoId) ?? [];
-
-    /// <summary>Items de una lista SOLO desde caché (0 cuota, nunca toca YouTube). Vacío si no está cargada.</summary>
-    public List<PlaylistItemDto> GetCachedItems(string playlistId) =>
-        _itemsCache.Load(CurrentUserKey(), playlistId) ?? [];
-
-    /// <summary>
-    /// Encola la recuperación de canciones como un PendingUpload sin fuentes (nada que
-    /// borrar): entra al panel de pendientes y se sube reanudable ante cuota agotada.
-    /// Si no se indica lista destino, crea una nueva (50 unidades).
-    /// </summary>
-    public async Task<PendingUploadDto> StageRecoveryAsync(RecoverSongsRequest req, CancellationToken ct = default)
-    {
-        if (req.Songs is not { Count: > 0 })
-            throw new ArgumentException("No hay canciones para recuperar.");
-
-        var userKey = CurrentUserKey();
-        string targetId;
-        string targetTitle;
-
-        if (!string.IsNullOrEmpty(req.TargetPlaylistId))
-        {
-            if (IsSpecialPlaylist(req.TargetPlaylistId))
-                throw new ArgumentException(
-                    "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
-                    "Me gusta) desde la API. Elegí otra lista destino.");
-            targetId = req.TargetPlaylistId;
-            targetTitle = TitleOf(targetId);
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(req.NewPlaylistTitle))
-                throw new ArgumentException("Indicá una lista destino o el nombre de la lista nueva.");
-            var yt = BuildClient();
-            var created = await yt.Playlists.Insert(new Playlist
-            {
-                Snippet = new PlaylistSnippet { Title = req.NewPlaylistTitle.Trim() },
-                Status = new PlaylistStatus { PrivacyStatus = "private" },
-            }, "snippet,status").ExecuteAsync(ct);
-            _quota.Add(50);
-            targetId = created.Id;
-            targetTitle = req.NewPlaylistTitle.Trim();
-        }
-
-        var plan = new PendingUpload
-        {
-            Id = Guid.NewGuid().ToString("N")[..12],
-            UserKey = userKey,
-            TargetPlaylistId = targetId,
-            TargetPlaylistTitle = targetTitle,
-            Items = req.Songs
-                .Where(s => !string.IsNullOrEmpty(s.VideoId))
-                .DistinctBy(s => s.VideoId)
-                .Select(s => new PendingUploadItem
-                {
-                    LocalItemId = $"recover-{Guid.NewGuid():N}",
-                    VideoId = s.VideoId,
-                    Title = s.Title,
-                    ChannelTitle = s.ChannelTitle,
-                    ThumbnailUrl = s.ThumbnailUrl,
-                    FromPlaylists = [],
-                })
-                .ToList(),
-            Sources = [],   // recuperación: no hay listas origen que borrar
-            CreatedAtUtc = DateTime.UtcNow,
-        };
-        _pendingUploads.Add(plan);
-        _log.Add("Recover(stage)", $"pending={plan.Id} target={targetId} items={plan.Items.Count} newList={string.IsNullOrEmpty(req.TargetPlaylistId)}");
-
-        return new PendingUploadDto(
-            plan.Id, plan.TargetPlaylistId, plan.TargetPlaylistTitle,
-            plan.Items.Count, plan.Items.Count * 50, plan.CreatedAtUtc,
-            plan.Items.Select(i => new PendingUploadItemDto(
-                i.VideoId, i.Title, i.ChannelTitle ?? "", i.ThumbnailUrl, i.FromPlaylists)).ToList(),
-            [], false, false);
-    }
-
-    /// <summary>
-    /// Canciones "huérfanas": conocidas por la app (cachés de listas borradas + registro
-    /// de actividad) pero ausentes de TODAS las playlists actuales. 0 cuota — solo disco.
-    /// </summary>
-    public List<RecoverableSongDto> GetRecoverableSongs()
-    {
-        // Ids de playlists vigentes según la caché de la lista (sin tocar YouTube).
-        var currentPlaylists = _cacheStore.Load()?.Playlists.Select(p => p.Id)
-            .ToHashSet(StringComparer.Ordinal) ?? [];
-
-        var snapshot = _itemsCache.SnapshotAllPlaylists();
-        var titleByPlaylist = _cacheStore.Load()?.Playlists
-            .ToDictionary(p => p.Id, p => p.Title, StringComparer.Ordinal) ?? [];
-        foreach (var a in _archivedStore.LoadAll())
-            titleByPlaylist.TryAdd(a.Id, a.Title);
-
-        // Presentes hoy: todo videoId en los items cacheados de playlists vigentes.
-        var present = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (playlistId, entry) in snapshot)
-            if (currentPlaylists.Contains(playlistId))
-                foreach (var it in entry.Items)
-                    if (!string.IsNullOrEmpty(it.VideoId)) present.Add(it.VideoId);
-
-        var orphans = new Dictionary<string, RecoverableSongDto>(StringComparer.Ordinal);
-
-        // Fuente 1: cachés de playlists que ya no existen (listas borradas cuya caché sobrevivió).
-        foreach (var (playlistId, entry) in snapshot)
-        {
-            if (currentPlaylists.Contains(playlistId)) continue;
-            var listName = titleByPlaylist.GetValueOrDefault(playlistId, playlistId);
-            foreach (var it in entry.Items)
-            {
-                if (string.IsNullOrEmpty(it.VideoId) || present.Contains(it.VideoId)) continue;
-                if (VideoAvailability.IsUnavailable(it.Title)) continue;
-                if (!orphans.ContainsKey(it.VideoId))
-                    orphans[it.VideoId] = new RecoverableSongDto(
-                        it.VideoId, it.Title, it.ChannelTitle, it.ThumbnailUrl, listName, entry.CachedAtUtc);
-            }
-        }
-
-        // Fuente 2: registro de actividad (inserts/deletes con videoId) — cubre listas cuya
-        // caché ya se invalidó. El evento más reciente por video manda.
-        foreach (var e in _activity.History(1000))
-        {
-            if (string.IsNullOrEmpty(e.VideoId) || present.Contains(e.VideoId)) continue;
-            if (VideoAvailability.IsUnavailable(e.Title)) continue;
-            if (orphans.TryGetValue(e.VideoId, out var cur) && cur.LastSeenUtc >= e.At) continue;
-            orphans[e.VideoId] = new RecoverableSongDto(
-                e.VideoId, e.Title, null,
-                $"https://i.ytimg.com/vi/{e.VideoId}/default.jpg",
-                e.Playlist, e.At);
-        }
-
-        return orphans.Values
-            .OrderByDescending(o => o.LastSeenUtc)
-            .ToList();
-    }
-
-    /// <summary>Sube TODA la cola de reasignaciones (corta y conserva el resto si se agota la cuota).</summary>
-    public async Task<SongMoveBulkResultDto> UploadAllSongMovesAsync(CancellationToken ct = default)
-    {
-        var moves = _songMoves.LoadForUser(CurrentUserKey());
-        int added = 0, removed = 0, failed = 0, completed = 0;
-        bool paused = false;
-        foreach (var m in moves)
-        {
-            if (paused) break;
-            var r = await UploadSongMoveAsync(m.Id, ct);
-            added += r.Added; removed += r.Removed; failed += r.Failed;
-            if (r.Paused) paused = true; else completed++;
-        }
-        var remaining = _songMoves.LoadForUser(CurrentUserKey()).Count;
-        return new SongMoveBulkResultDto(moves.Count, completed, added, removed, failed, paused, remaining);
-    }
-
-    /// <summary>Descarta TODA la cola de reasignaciones y revierte los cambios locales.</summary>
-    public void DiscardAllSongMoves()
-    {
-        foreach (var m in _songMoves.LoadForUser(CurrentUserKey()))
-            DiscardSongMove(m.Id);
-    }
-
-    /// <summary>Para un set de videoIds, las listas (ids) donde está cada uno (caché, 0 cuota).</summary>
-    public Dictionary<string, List<string>> GetSongLocationsBatch(List<string> videoIds)
-    {
-        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        var want = new HashSet<string>(videoIds ?? [], StringComparer.Ordinal);
-        if (want.Count == 0) return result;
-
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
-        if (cache?.Playlists is null) return result;
-
-        foreach (var pl in cache.Playlists)
-        {
-            var items = _itemsCache.Load(userKey, pl.Id);
-            if (items is null) continue;
-            foreach (var it in items)
-            {
-                if (string.IsNullOrEmpty(it.VideoId) || !want.Contains(it.VideoId)) continue;
-                if (!result.TryGetValue(it.VideoId, out var list))
-                {
-                    list = [];
-                    result[it.VideoId] = list;
-                }
-                if (!list.Contains(pl.Id)) list.Add(pl.Id);
-            }
-        }
-        return result;
-    }
-
-    /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist. Local-first: deja en cola para sincronizar al Subir.</summary>
-    public int StageRemoveItemsFromPlaylist(string playlistId, List<string> playlistItemIds)
-    {
-        if (string.IsNullOrEmpty(playlistId) || playlistItemIds is null || playlistItemIds.Count == 0) return 0;
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
-        var title = TitleOf(playlistId);
-        var items = _itemsCache.Load(userKey, playlistId);
-        if (items is null) return 0;
-
-        var targetIds = playlistItemIds.Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        var removedItemIds = new HashSet<string>(StringComparer.Ordinal);
-        int staged = 0;
-        foreach (var itemId in targetIds)
-        {
-            var hit = items.FirstOrDefault(i => i.PlaylistItemId == itemId);
-            if (hit is null) continue;
-            _songMoves.Add(new PendingSongMove
-            {
-                Id = Guid.NewGuid().ToString("N")[..12],
-                UserKey = userKey,
-                VideoId = hit.VideoId,
-                Title = hit.Title,
-                ChannelTitle = hit.ChannelTitle,
-                ThumbnailUrl = hit.ThumbnailUrl,
-                AddTo = [],
-                RemoveFrom = [new SongMoveRemoval { PlaylistId = playlistId, PlaylistTitle = title, PlaylistItemId = hit.PlaylistItemId }],
-                CreatedAtUtc = DateTime.UtcNow,
-            });
-            removedItemIds.Add(hit.PlaylistItemId);
-            staged++;
-        }
-        if (removedItemIds.Count > 0)
-            _itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());
-
-        if (staged > 0) _touchStore.Touch(playlistId);
-        _log.Add("RemoveItems(local)", $"playlist={playlistId} staged={staged}");
-        return staged;
-    }
-
-    public async Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default)
-    {
-        var userKey = CurrentUserKey();
-        var cache = _cacheStore.Load();
-
-        // Si no hay caché de playlists, la primera llamada rellena la lista
-        // (consume ~1u de quota, ~50 playlists por página).
-        // Refrescar es justamente ignorar la caché: antes se saltaba toda lista que ya
-        // tuviera items guardados, así que con la caché caliente el botón no hacía nada.
-        var playlists = await GetMyPlaylistsAsync(ct, forceRefresh: true);
-
-        int itemsRefreshed = 0;
-        int playlistsRefreshed = 0;
-        int playlistsSkipped = 0;
-        int quotaUsed = 1;
-
-        foreach (var pl in playlists)
-        {
-            try
-            {
-                var items = await GetPlaylistItemsAsync(pl.Id, ct, forceRefresh: true);
-                itemsRefreshed += items.Count;
-                playlistsRefreshed++;
-                // ~1u cada 50 items, redondeado arriba.
-                quotaUsed += Math.Max(1, (int)Math.Ceiling(items.Count / 50.0));
-            }
-            catch (Google.GoogleApiException ex)
-            {
-                playlistsSkipped++;
-                _logger.LogWarning(ex, "No se pudo refrescar la playlist {Id}; se omite.", pl.Id);
-                if (QuotaTracker.IsQuotaError(ex)) break;   // sin cuota no tiene sentido seguir
-            }
-        }
-
-        _log.Add("RefreshAll", $"playlistsRefreshed={playlistsRefreshed} itemsRefreshed={itemsRefreshed} skipped={playlistsSkipped} quota~{quotaUsed}");
-        return new RefreshAllResultDto(playlistsRefreshed, itemsRefreshed, playlistsSkipped, quotaUsed);
-    }
+    // ── Archivadas ──
 
     public Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default)
     {
         var byId = new Dictionary<string, PlaylistArchivedInfoDto>(StringComparer.Ordinal);
-        foreach (var a in _archivedStore.LoadAll())
+        foreach (var a in archivedStore.LoadAll())
         {
             byId[a.Id] = new PlaylistArchivedInfoDto(
                 Id: a.Id,
@@ -1369,7 +665,7 @@ public class YouTubeService : IYouTubeService
         // Recuperar listas borradas de merges anteriores que el flujo previo no
         // registró en el store de archivadas: se derivan de las revisiones de
         // merge que pidieron borrar las listas origen.
-        foreach (var plan in _reviewStore.LoadAll().Where(p => p.DeleteSources))
+        foreach (var plan in reviewStore.LoadAll().Where(p => p.DeleteSources))
         {
             foreach (var s in plan.Sources)
             {
@@ -1386,32 +682,5 @@ public class YouTubeService : IYouTubeService
 
         var list = byId.Values.OrderByDescending(x => x.ArchivedAt).ToList();
         return Task.FromResult(list);
-    }
-
-    // ---- Helpers ----
-    private static readonly Regex _nonWord = new(@"[^\p{L}\p{Nd}\s]", RegexOptions.Compiled);
-    private static readonly Regex _multiSpace = new(@"\s+", RegexOptions.Compiled);
-    private static readonly string[] _noiseTokens =
-    [
-        "official", "video", "videoclip", "audio", "lyrics", "letra", "hd", "hq",
-        "remastered", "remaster", "mv", "feat", "ft", "featuring", "cover"
-    ];
-
-    public static string Normalize(string title)
-    {
-        if (string.IsNullOrWhiteSpace(title)) return "";
-        // quitar paréntesis/brackets enteros
-        var t = Regex.Replace(title, @"[\(\[].*?[\)\]]", " ");
-        t = t.ToLower(CultureInfo.InvariantCulture);
-        // quitar diacríticos
-        var formD = t.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder();
-        foreach (var c in formD)
-            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
-                sb.Append(c);
-        t = sb.ToString().Normalize(NormalizationForm.FormC);
-        t = _nonWord.Replace(t, " ");
-        var tokens = _multiSpace.Split(t).Where(x => x.Length > 1 && !_noiseTokens.Contains(x));
-        return string.Join(" ", tokens).Trim();
     }
 }

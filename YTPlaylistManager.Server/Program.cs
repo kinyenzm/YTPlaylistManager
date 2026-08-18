@@ -27,8 +27,13 @@ builder.Services.AddSingleton<PlaylistTouchStore>();
 builder.Services.AddSingleton<PlaylistCacheStore>();
 builder.Services.AddSingleton<PlaylistItemsCacheStore>();
 builder.Services.AddSingleton<GoogleTokenDataStore>();
+builder.Services.AddSingleton<PlaylistCatalog>();
 builder.Services.AddScoped<GoogleSessionValidator>();
+builder.Services.AddScoped<YouTubeClientFactory>();
 builder.Services.AddScoped<IYouTubeService, YouTubeService>();
+builder.Services.AddScoped<DuplicateService>();
+builder.Services.AddScoped<RecoveryService>();
+builder.Services.AddScoped<SongMoveService>();
 builder.Services.AddScoped<ISongSearchService, SongSearchService>();
 
 // Selección del proveedor de IA según appsettings: Ai:Provider = nvidia (por defecto).

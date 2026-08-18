@@ -2,31 +2,23 @@ using YTPlaylistManager.Server.DTOs;
 
 namespace YTPlaylistManager.Server.Services;
 
+/// <summary>
+/// Lectura de playlists y ciclo de unión. Duplicados, recuperación y
+/// reasignaciones tienen servicios propios (DuplicateService, RecoveryService,
+/// SongMoveService).
+/// </summary>
 public interface IYouTubeService
 {
     Task<List<PlaylistDto>> GetMyPlaylistsAsync(CancellationToken ct = default, bool forceRefresh = false, bool includeArchived = false);
     Task<List<PlaylistItemDto>> GetPlaylistItemsAsync(string playlistId, CancellationToken ct = default, bool forceRefresh = false);
     List<PlaylistItemDto> GetCachedItems(string playlistId);
-    List<RecoverableSongDto> GetRecoverableSongs();
-    Task<PendingUploadDto> StageRecoveryAsync(RecoverSongsRequest req, CancellationToken ct = default);
-    Task<DuplicateReportDto> FindDuplicatesAsync(string playlistId, CancellationToken ct = default);
-    Task<CrossDuplicateReportDto> FindCrossDuplicatesAsync(CancellationToken ct = default, bool forceRefresh = false);
-    Task<RemoveDuplicatesResultDto> RemoveDuplicatesAsync(RemoveDuplicatesRequest req, CancellationToken ct = default);
-    Task<MergePlaylistsResultDto> MergePlaylistsAsync(MergePlaylistsRequest req, CancellationToken ct = default);
+    Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default);
+
     MergePreviewDto PreviewMerge(MergePreviewRequest req);
+    Task<MergePlaylistsResultDto> MergePlaylistsAsync(MergePlaylistsRequest req, CancellationToken ct = default);
     List<PendingUploadDto> GetPendingUploads();
     Task<UploadResultDto> UploadPendingAsync(string id, int? limit = null, CancellationToken ct = default);
     void DiscardPending(string id);
-    PendingSongMoveDto? StageSongAssignment(AssignSongRequest req);
-    List<string> GetSongLocations(string videoId);
-    Dictionary<string, List<string>> GetSongLocationsBatch(List<string> videoIds);
-    int StageRemoveItemsFromPlaylist(string playlistId, List<string> playlistItemIds);
-    List<PendingSongMoveDto> GetPendingSongMoves();
-    Task<SongMoveUploadResultDto> UploadSongMoveAsync(string id, CancellationToken ct = default);
-    Task<SongMoveBulkResultDto> UploadAllSongMovesAsync(CancellationToken ct = default);
-    void DiscardSongMove(string id);
-    void DiscardAllSongMoves();
-    Task<RefreshAllResultDto> RefreshAllAsync(CancellationToken ct = default);
+
     Task<List<PlaylistArchivedInfoDto>> GetArchivedPlaylistsAsync(CancellationToken ct = default);
 }
-
