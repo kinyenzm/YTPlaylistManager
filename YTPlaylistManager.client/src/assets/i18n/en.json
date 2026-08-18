@@ -110,7 +110,7 @@
     "alert_removed": "Removed {{removed}}. Kept {{kept}}.",
     "dup_keep_this": "Keep this",
     "dup_remove_copy": "Remove",
-    "dup_action_hint": "Remove copies here. Changes stay pending upload to YouTube (upload them from My playlists).",
+    "dup_action_hint": "Remove copies here. Changes are queued for upload to YouTube (upload them from the floating pending-changes panel).",
     "dup_staged": "Removed: {{n}}. It's in the changes queue — use the floating button at the bottom left to upload or discard.",
     "dup_confirm": "Remove {{n}} cop(y/ies) of \"{{title}}\" from this list? It applies locally now and is queued for upload to YouTube.",
     "ai_config_error": "Check the AI configuration",
@@ -207,7 +207,7 @@
   },
   "cache": {
     "title": "History",
-    "intro": "Everything the app did, saved on your device. None of this is on YouTube — it's your record: which lists I removed from YouTube (and where their songs went), the merges done, and a summary of your library.",
+    "intro": "A registry the app keeps in its data folder, on the machine running the server — not in your browser: clearing browser cache or data does not affect it. None of this lives on YouTube; it is the local history: which playlists were removed (and where their songs went), the merges made, and a summary of your library. Back up that folder and you back up this history.",
     "refresh": "Reload",
     "export": "Export",
     "tab_dashboard": "Summary",
