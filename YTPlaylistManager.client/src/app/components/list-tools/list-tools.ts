@@ -89,9 +89,9 @@ export class ListTools {
       .pipe(finalize(() => this.cleaning.set(false)))
       .subscribe({
         next: (r) => {
-          alert(this.translate.instant('detail.alert_removed', { removed: r.removed, kept: r.kept }));
+          alert(this.translate.instant('detail.clean_staged', { n: r.removed }));
+          this.pending.refresh();   // aparecen en el chip: nada se borró de YouTube todavía
           this.changed.emit();
-          this.loadDuplicates();
         },
         error: (e) => this.failed.emit(this.apiError.message(e, 'cross.error_scan')),
       });

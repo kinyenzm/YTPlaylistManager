@@ -13,10 +13,9 @@ namespace YTPlaylistManager.Server.Services;
 public sealed class DuplicateService(
     IYouTubeService youtube,
     YouTubeClientFactory clientFactory,
+    SongMoveService songMoves,
     PlaylistItemsCacheStore itemsCache,
-    PlaylistTouchStore touchStore,
     QuotaTracker quota,
-    OperationLog log,
     ILogger<DuplicateService> logger)
 {
     public async Task<DuplicateReportDto> FindDuplicatesAsync(string playlistId, CancellationToken ct = default)
@@ -129,6 +128,11 @@ public sealed class DuplicateService(
         return new CrossDuplicateReportDto(playlists.Count, groups.Count, groups, scanned, failed);
     }
 
+    /// <summary>
+    /// Encola quitar las copias repetidas (conserva la primera de cada grupo). NO borra
+    /// directo: las remociones entran a la cola de pendientes como cualquier otro cambio,
+    /// el usuario las revisa en el panel y la subida hace los borrados reales en YouTube.
+    /// </summary>
     public RemoveDuplicatesResultDto RemoveDuplicates(RemoveDuplicatesRequest req)
     {
         var userKey = clientFactory.CurrentUserKey();
@@ -144,34 +148,23 @@ public sealed class DuplicateService(
         // idéntico entre canciones distintas) ni los títulos que normalizan a vacío:
         // agruparlos borraría canciones reales que solo comparten el placeholder.
         var untouchable = req.Strategy == "normalizedTitle"
-            ? items.Where(x => VideoAvailability.IsUnavailable(x.Title) || string.IsNullOrWhiteSpace(Normalize(x.Title))).ToList()
+            ? items.Where(x => VideoAvailability.IsUnavailable(x.Title) || string.IsNullOrWhiteSpace(Normalize(x.Title)))
+                .Select(x => x.PlaylistItemId)
+                .ToHashSet(StringComparer.Ordinal)
             : [];
-        var untouchableIds = untouchable.Select(x => x.PlaylistItemId).ToHashSet(StringComparer.Ordinal);
-        var dedupable = items.Where(x => !untouchableIds.Contains(x.PlaylistItemId));
+        var dedupable = items.Where(x => !untouchable.Contains(x.PlaylistItemId));
 
-        // Mantenemos el primero de cada grupo (menor Position), eliminamos el resto.
         IEnumerable<IGrouping<string, PlaylistItemDto>> groups = req.Strategy == "normalizedTitle"
             ? dedupable.GroupBy(x => Normalize(x.Title))
             : dedupable.Where(x => !string.IsNullOrEmpty(x.VideoId)).GroupBy(x => x.VideoId);
 
-        var toKeep = new List<PlaylistItemDto>(untouchable);
-        int removed = 0;
-
+        // Se conserva la primera de cada grupo (menor Position); el resto se encola.
+        var toRemove = new List<string>();
         foreach (var g in groups)
-        {
-            var ordered = g.OrderBy(x => x.Position).ToList();
-            if (ordered.Count == 0) continue;
-            toKeep.Add(ordered[0]);
-            removed += ordered.Count - 1;
-        }
+            toRemove.AddRange(g.OrderBy(x => x.Position).Skip(1).Select(x => x.PlaylistItemId));
 
-        // Reordenar por Position para que la lista se vea coherente.
-        toKeep = toKeep.OrderBy(x => x.Position).ToList();
-
-        itemsCache.Save(userKey, req.PlaylistId, toKeep);
-        touchStore.Touch(req.PlaylistId);
-        log.Add("RemoveDuplicates", $"playlist={req.PlaylistId} strategy={req.Strategy} removed={removed} kept={toKeep.Count} (local)");
-        return new RemoveDuplicatesResultDto(req.PlaylistId, removed, toKeep.Count);
+        var staged = songMoves.StageRemoveItemsFromPlaylist(req.PlaylistId, toRemove);
+        return new RemoveDuplicatesResultDto(req.PlaylistId, staged, items.Count - staged);
     }
 
     // ── Normalización de títulos ──

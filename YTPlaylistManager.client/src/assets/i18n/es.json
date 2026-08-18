@@ -106,7 +106,7 @@
     "busy_cleaning": "Eliminando repetidas…",
     "busy_classifying": "Ordenando con IA…",
     "busy_finding": "Buscando repetidas…",
-    "confirm_remove": "¿Eliminar las repetidas? Se conserva una sola copia de cada canción.",
+    "confirm_remove": "¿Quitar las repetidas? Se conserva una copia de cada canción; las demás quedan en la cola de cambios para revisarlas y subirlas cuando quieras.",
     "alert_removed": "Eliminadas {{removed}}. Quedaron {{kept}}.",
     "dup_keep_this": "Dejar esta",
     "dup_remove_copy": "Quitar",
@@ -114,7 +114,8 @@
     "dup_staged": "Quitado: {{n}}. Quedó en la cola de cambios — usá el botón flotante de abajo a la izquierda para subir o descartar.",
     "dup_confirm": "¿Quitar {{n}} copia(s) de «{{title}}» de esta lista? Se aplica en local ahora y queda en cola para subir a YouTube.",
     "ai_config_error": "Revisá la configuración de IA",
-    "ai_generic_error": "La clasificación falló; intentá de nuevo"
+    "ai_generic_error": "La clasificación falló; intentá de nuevo",
+    "clean_staged": "{{n}} copias encoladas para quitar. Revisalas y subilas desde el botón flotante de cambios pendientes."
   },
   "cross": {
     "title": "Organizar canciones",
@@ -185,7 +186,9 @@
     "recover_need_target": "Elegí una lista destino o escribí el nombre de la nueva.",
     "recover_confirm": "Se encolarán {{n}} canción(es) para subir desde el panel de pendientes (50 unidades c/u al subir). ¿Continuar?",
     "unavailable_tag": "No disponible",
-    "dups_in_list": "{{n}} repetidas"
+    "dups_in_list": "{{n}} repetidas",
+    "copies_badge": "×{{n}} en esta lista",
+    "copies_hint": "El mismo video está varias veces en esta lista. Usá «Buscar duplicadas» para quitar copias sueltas."
   },
   "pending": {
     "chip": "{{n}} sin subir",

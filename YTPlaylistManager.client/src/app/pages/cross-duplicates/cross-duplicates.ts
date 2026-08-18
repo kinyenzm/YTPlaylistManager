@@ -97,12 +97,24 @@ export class CrossDuplicates {
   protected readonly listTitle = computed(() => this.titleById()[this.listId()] ?? null);
   // Canciones de esa lista repetidas en otras (badge rojo del selector)
   protected readonly dupCounts = signal<Record<string, number>>({});
-  // Primero las canciones que están en más de una playlist.
+  // Copias del mismo video dentro de la lista abierta (videoId → cuántas veces).
+  protected readonly copiesByVideo = computed<Record<string, number>>(() => {
+    const m: Record<string, number> = {};
+    for (const it of this.listItems()) {
+      if (it.videoId) m[it.videoId] = (m[it.videoId] ?? 0) + 1;
+    }
+    return m;
+  });
+  // Primero las repetidas dentro de la misma lista; después las que están en
+  // más playlists; el resto conserva el orden de la lista.
   protected readonly listItemsSorted = computed(() => {
+    const copies = this.copiesByVideo();
     const m = this.locMap();
-    return [...this.listItems()].sort(
-      (a, b) => (m[b.videoId]?.length ?? 0) - (m[a.videoId]?.length ?? 0),
-    );
+    return [...this.listItems()].sort((a, b) => {
+      const byCopies = (copies[b.videoId] ?? 0) - (copies[a.videoId] ?? 0);
+      if (byCopies !== 0) return byCopies;
+      return (m[b.videoId]?.length ?? 0) - (m[a.videoId]?.length ?? 0);
+    });
   });
 
   // Modo "por canción" — filtrado en vivo (debounce, sin Enter)

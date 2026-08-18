@@ -10,6 +10,11 @@
         @if (countBadge() > 1) {
           <span class="tag tag--inline">{{ 'cross.in_count' | translate:{ count: countBadge() } }}</span>
         }
+        @if (copies() > 1) {
+          <span class="tag tag--danger tag--inline" [title]="'cross.copies_hint' | translate">
+            {{ 'cross.copies_badge' | translate:{ n: copies() } }}
+          </span>
+        }
       </div>
       @if (channelTitle()) {
         <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{ channelTitle() }}</div>

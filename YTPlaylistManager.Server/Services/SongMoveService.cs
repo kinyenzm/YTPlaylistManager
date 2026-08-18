@@ -303,26 +303,32 @@ public sealed class SongMoveService(
         if (items is null) return 0;
 
         var targetIds = playlistItemIds.Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        var removedItemIds = new HashSet<string>(StringComparer.Ordinal);
-        int staged = 0;
-        foreach (var itemId in targetIds)
+        var hits = items.Where(i => targetIds.Contains(i.PlaylistItemId)).ToList();
+        var removedItemIds = hits.Select(h => h.PlaylistItemId).ToHashSet(StringComparer.Ordinal);
+        int staged = hits.Count;
+
+        // Un pendiente por canción con todas sus copias: quitar 3 copias del mismo video
+        // es UNA tarjeta en el panel (3 borrados al subir), no tres tarjetas.
+        foreach (var byVideo in hits.GroupBy(h => h.VideoId))
         {
-            var hit = items.FirstOrDefault(i => i.PlaylistItemId == itemId);
-            if (hit is null) continue;
+            var first = byVideo.First();
             songMoves.Add(new PendingSongMove
             {
                 Id = Guid.NewGuid().ToString("N")[..12],
                 UserKey = userKey,
-                VideoId = hit.VideoId,
-                Title = hit.Title,
-                ChannelTitle = hit.ChannelTitle,
-                ThumbnailUrl = hit.ThumbnailUrl,
+                VideoId = first.VideoId,
+                Title = first.Title,
+                ChannelTitle = first.ChannelTitle,
+                ThumbnailUrl = first.ThumbnailUrl,
                 AddTo = [],
-                RemoveFrom = [new SongMoveRemoval { PlaylistId = playlistId, PlaylistTitle = title, PlaylistItemId = hit.PlaylistItemId }],
+                RemoveFrom = [.. byVideo.Select(h => new SongMoveRemoval
+                {
+                    PlaylistId = playlistId,
+                    PlaylistTitle = title,
+                    PlaylistItemId = h.PlaylistItemId,
+                })],
                 CreatedAtUtc = DateTime.UtcNow,
             });
-            removedItemIds.Add(hit.PlaylistItemId);
-            staged++;
         }
         if (removedItemIds.Count > 0)
             itemsCache.Save(userKey, playlistId, items.Where(i => !removedItemIds.Contains(i.PlaylistItemId)).ToList());

@@ -28,6 +28,8 @@ export class SongCard {
   readonly listId = input<string>('');
   /** "en N listas" del modo por canción. */
   readonly countBadge = input<number>(0);
+  /** Copias de este mismo video dentro de la lista abierta (modo por lista). */
+  readonly copies = input<number>(0);
   /** La tarjeta entera abre el editor (modo por canción). */
   readonly selectable = input(false);
   readonly showAssign = input(true);

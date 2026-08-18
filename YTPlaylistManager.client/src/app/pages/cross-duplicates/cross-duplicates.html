@@ -83,6 +83,7 @@
               [currentIds]="locMap()[it.videoId]"
               [titles]="titleById()"
               [listId]="listId()"
+              [copies]="copiesByVideo()[it.videoId] || 0"
               (assign)="openEditor(it.videoId, it.title)" />
           }
         </div>

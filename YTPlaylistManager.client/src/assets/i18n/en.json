@@ -106,7 +106,7 @@
     "busy_cleaning": "Removing duplicates…",
     "busy_classifying": "Sorting with AI…",
     "busy_finding": "Finding duplicates…",
-    "confirm_remove": "Remove the duplicates? One copy of each song will be kept.",
+    "confirm_remove": "Remove duplicates? One copy of each song is kept; the rest go to the pending queue so you can review and upload when ready.",
     "alert_removed": "Removed {{removed}}. Kept {{kept}}.",
     "dup_keep_this": "Keep this",
     "dup_remove_copy": "Remove",
@@ -114,7 +114,8 @@
     "dup_staged": "Removed: {{n}}. It's in the changes queue — use the floating button at the bottom left to upload or discard.",
     "dup_confirm": "Remove {{n}} cop(y/ies) of \"{{title}}\" from this list? It applies locally now and is queued for upload to YouTube.",
     "ai_config_error": "Check the AI configuration",
-    "ai_generic_error": "Classification failed; try again"
+    "ai_generic_error": "Classification failed; try again",
+    "clean_staged": "{{n}} copies queued for removal. Review and upload them from the floating pending-changes button."
   },
   "cross": {
     "title": "Organize songs",
@@ -185,7 +186,9 @@
     "recover_need_target": "Pick a target playlist or type the new playlist name.",
     "recover_confirm": "{{n}} song(s) will be queued for upload from the pending panel (50 units each on upload). Continue?",
     "unavailable_tag": "Unavailable",
-    "dups_in_list": "{{n}} duplicates"
+    "dups_in_list": "{{n}} duplicates",
+    "copies_badge": "×{{n}} in this list",
+    "copies_hint": "The same video appears multiple times in this list. Use “Find duplicates” to remove individual copies."
   },
   "pending": {
     "chip": "{{n}} not uploaded",
