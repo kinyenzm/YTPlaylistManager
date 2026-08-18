@@ -246,7 +246,7 @@ public sealed class YouTubeService(
 
         var targetItems = itemsCache.Load(userKey, targetId);
         if (targetItems is null)
-            warnings.Add($"La lista destino «{targetTitle}» no está cargada; abrila o usá «Actualizar» para un cálculo exacto.");
+            warnings.Add($"La lista destino «{targetTitle}» no está cargada; ábrela o usa «Actualizar» para un cálculo exacto.");
 
         var existing = new HashSet<string>(
             (targetItems ?? new List<PlaylistItemDto>())
@@ -263,7 +263,7 @@ public sealed class YouTubeService(
             var items = itemsCache.Load(userKey, src);
             if (items is null)
             {
-                warnings.Add($"La lista «{srcTitle}» no está cargada; abrila para incluirla en la vista previa.");
+                warnings.Add($"La lista «{srcTitle}» no está cargada; ábrela para incluirla en la vista previa.");
                 continue;
             }
 
@@ -304,7 +304,7 @@ public sealed class YouTubeService(
         if (PlaylistCatalog.IsSpecialPlaylist(req.TargetPlaylistId))
             throw new ArgumentException(
                 "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
-                "Me gusta) desde la API. Elegí otra lista destino.");
+                "Me gusta) desde la API. Elige otra lista destino.");
 
         var targetId = req.TargetPlaylistId;
         var targetTitle = catalog.TitleOf(targetId);

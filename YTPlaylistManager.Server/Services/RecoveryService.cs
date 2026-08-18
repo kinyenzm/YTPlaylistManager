@@ -95,14 +95,14 @@ public sealed class RecoveryService(
             if (PlaylistCatalog.IsSpecialPlaylist(req.TargetPlaylistId))
                 throw new ArgumentException(
                     "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
-                    "Me gusta) desde la API. Elegí otra lista destino.");
+                    "Me gusta) desde la API. Elige otra lista destino.");
             targetId = req.TargetPlaylistId;
             targetTitle = catalog.TitleOf(targetId);
         }
         else
         {
             if (string.IsNullOrWhiteSpace(req.NewPlaylistTitle))
-                throw new ArgumentException("Indicá una lista destino o el nombre de la lista nueva.");
+                throw new ArgumentException("Indica una lista destino o el nombre de la lista nueva.");
             var yt = clientFactory.BuildClient();
             var created = await yt.Playlists.Insert(new Playlist
             {

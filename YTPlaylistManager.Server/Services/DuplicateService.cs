@@ -142,7 +142,7 @@ public sealed class DuplicateService(
         // (lo que la cachea) y volver a intentar.
         var items = itemsCache.Load(userKey, req.PlaylistId)
             ?? throw new InvalidOperationException(
-                "La playlist no está en caché. Abrila una vez desde la app para que se cargue y volvé a intentar.");
+                "La playlist no está en caché. Ábrela una vez desde la app para que se cargue y vuelve a intentar.");
 
         // Por título nunca se tocan los videos privados/eliminados (su título placeholder es
         // idéntico entre canciones distintas) ni los títulos que normalizan a vacío:

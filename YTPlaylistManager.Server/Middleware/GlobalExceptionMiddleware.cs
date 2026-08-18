@@ -50,7 +50,7 @@ public sealed class GlobalExceptionMiddleware(
                 tokenStore.Save(t);
             }
             await WriteErrorResponse(context, HttpStatusCode.Unauthorized,
-                "La sesión de Google expiró. Cerrá sesión y volvé a conectarte.");
+                "La sesión de Google expiró. Cierra sesión y vuelve a conectarte.");
         }
         catch (Google.GoogleApiException ex)
         {
@@ -79,7 +79,7 @@ public sealed class GlobalExceptionMiddleware(
             // Timeout interno u otra cancelación no iniciada por el cliente.
             logger.LogWarning(ex, "Operación cancelada");
             await WriteErrorResponse(context, HttpStatusCode.ServiceUnavailable,
-                "La operación fue cancelada. Intentá de nuevo.");
+                "La operación fue cancelada. Intenta de nuevo.");
         }
         catch (HttpRequestException ex)
         {
