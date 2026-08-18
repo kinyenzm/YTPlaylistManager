@@ -1,8 +1,9 @@
-import { Component, ChangeDetectionStrategy, signal, inject, input, effect, OnInit } from '@angular/core';
+import { Component, ChangeDetectionStrategy, signal, inject, input, effect, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 import { ApiErrorService } from '../../services/api-error.service';
 import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, ActivityItem } from '../../models/models';
 import { SkeletonList } from '../ui/skeleton-list';
@@ -16,9 +17,11 @@ type Tab = 'dashboard' | 'archived' | 'reviews' | 'activity' | 'history';
   imports: [DatePipe, TranslateModule, SkeletonList, SongHistory],
   templateUrl: './cache-explorer.html',
 })
-export class CacheExplorer implements OnInit {
+export class CacheExplorer {
   private readonly api = inject(ApiService);
   private readonly apiError = inject(ApiErrorService);
+  private readonly auth = inject(AuthService);
+  protected readonly connected = this.auth.connected;
 
   cacheStatus = signal<CacheStatus | null>(null);
   archivedPlaylists = signal<PlaylistArchivedInfo[]>([]);
@@ -37,11 +40,26 @@ export class CacheExplorer implements OnInit {
     effect(() => {
       if (this.tab() === 'activity') this.activeTab.set('activity');
     });
-  }
 
-  ngOnInit(): void {
-    this.loadCacheData();
-    this.loadActivity();
+    // El backend exige sesión también para el caché ("sin sesión no se muestra ni
+    // caché"): cargar solo conectado y vaciar todo al desconectar.
+    effect(() => {
+      if (this.connected()) {
+        untracked(() => {
+          this.loadCacheData();
+          this.loadActivity();
+        });
+      } else {
+        untracked(() => {
+          this.cacheStatus.set(null);
+          this.archivedPlaylists.set([]);
+          this.mergeReviews.set([]);
+          this.activityLog.set([]);
+          this.error.set(null);
+          this.isLoading.set(false);
+        });
+      }
+    });
   }
 
   loadActivity(): void {

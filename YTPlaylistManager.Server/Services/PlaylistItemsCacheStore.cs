@@ -7,24 +7,23 @@ namespace YTPlaylistManager.Server.Services;
 /// Caché en JSON de los items por playlist, por cuenta (UserKey). Evita re-leer de YouTube
 /// (cuota) en cada análisis de duplicados/repetidas. Los escaneos parciales se acumulan:
 /// lo que se lee una vez queda guardado y se reutiliza.
+///
+/// El documento deserializado se conserva en memoria (el archivo ronda 1,4 MB y algunos
+/// flujos hacen un Load por playlist: sin esto, una sola petición de ubicaciones
+/// deserializaba el archivo entero ~50 veces). Toda escritura pasa por SaveAll, que
+/// mantiene memoria y disco en sincronía. Las listas devueltas se comparten con la
+/// caché: tratarlas como de solo lectura (los DTOs son records inmutables).
 /// </summary>
-public class PlaylistItemsCacheStore
+public sealed class PlaylistItemsCacheStore(IConfiguration cfg)
+    : JsonFileStore(cfg, "items-cache.json")
 {
-    private readonly string _path;
-    private readonly object _lock = new();
-
-    public PlaylistItemsCacheStore(IConfiguration cfg)
-    {
-        var folder = cfg["Storage:DataFolder"] ?? "./data";
-        Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, "items-cache.json");
-    }
+    private Dictionary<string, Dictionary<string, CachedItems>>? _doc;
 
     public List<PlaylistItemDto>? Load(string userKey, string playlistId)
     {
-        lock (_lock)
+        lock (Sync)
         {
-            var all = LoadAllUnlocked();
+            var all = Doc();
             if (all.TryGetValue(userKey, out var byPlaylist) &&
                 byPlaylist.TryGetValue(playlistId, out var entry))
                 return entry.Items;
@@ -42,9 +41,9 @@ public class PlaylistItemsCacheStore
 
     public void Save(string userKey, string playlistId, List<PlaylistItemDto> items)
     {
-        lock (_lock)
+        lock (Sync)
         {
-            var all = LoadAllUnlocked();
+            var all = Doc();
             if (!all.TryGetValue(userKey, out var byPlaylist))
             {
                 byPlaylist = [];
@@ -58,9 +57,9 @@ public class PlaylistItemsCacheStore
     /// <summary>Invalida la caché de una playlist (tras escrituras que la cambian).</summary>
     public void Invalidate(string userKey, string playlistId)
     {
-        lock (_lock)
+        lock (Sync)
         {
-            var all = LoadAllUnlocked();
+            var all = Doc();
             bool changed = false;
             foreach (var byPlaylist in all.Values)   // quitar de todas las claves (incl. copias huérfanas)
                 if (byPlaylist.Remove(playlistId)) changed = true;
@@ -75,9 +74,9 @@ public class PlaylistItemsCacheStore
     /// </summary>
     public void MigrateToKey(string newKey)
     {
-        lock (_lock)
+        lock (Sync)
         {
-            var all = LoadAllUnlocked();
+            var all = Doc();
             if (all.Count == 0 || (all.Count == 1 && all.ContainsKey(newKey))) return;
 
             var merged = all.TryGetValue(newKey, out var existing) ? existing : [];
@@ -105,10 +104,10 @@ public class PlaylistItemsCacheStore
     /// </summary>
     public Dictionary<string, CachedItems> SnapshotAllPlaylists()
     {
-        lock (_lock)
+        lock (Sync)
         {
             var merged = new Dictionary<string, CachedItems>();
-            foreach (var byPlaylist in LoadAllUnlocked().Values)
+            foreach (var byPlaylist in Doc().Values)
                 foreach (var (playlistId, entry) in byPlaylist)
                     if (!merged.TryGetValue(playlistId, out var cur) || entry.Items.Count > cur.Items.Count)
                         merged[playlistId] = entry;
@@ -126,7 +125,7 @@ public class PlaylistItemsCacheStore
 
     private Dictionary<string, Dictionary<string, CachedItems>> LoadBakUnlocked()
     {
-        var bak = _path + ".bak";
+        var bak = FilePath + ".bak";
         if (!File.Exists(bak)) return [];
         try
         {
@@ -138,15 +137,14 @@ public class PlaylistItemsCacheStore
         }
     }
 
-    private Dictionary<string, Dictionary<string, CachedItems>> LoadAllUnlocked()
-    {
-        if (!File.Exists(_path)) return [];
-        var raw = File.ReadAllText(_path);
-        return JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, CachedItems>>>(raw) ?? [];
-    }
+    private Dictionary<string, Dictionary<string, CachedItems>> Doc()
+        => _doc ??= Read<Dictionary<string, Dictionary<string, CachedItems>>>() ?? [];
 
     private void SaveAll(Dictionary<string, Dictionary<string, CachedItems>> all)
-        => File.WriteAllText(_path, JsonSerializer.Serialize(all, new JsonSerializerOptions { WriteIndented = false }));
+    {
+        _doc = all;
+        Write(all, indented: false);
+    }
 }
 
 public sealed class CachedItems

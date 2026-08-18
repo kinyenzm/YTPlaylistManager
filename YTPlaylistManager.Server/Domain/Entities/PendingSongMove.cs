@@ -4,7 +4,7 @@ namespace YTPlaylistManager.Server.Domain.Entities;
 /// Reasignación de una canción a playlists, aplicada en local y pendiente de subir.
 /// Guarda en qué listas hay que insertarla (AddTo) y de cuáles quitarla (RemoveFrom).
 /// </summary>
-public sealed class PendingSongMove
+public sealed class PendingSongMove : Services.IUserScopedPlan
 {
     public string Id { get; set; } = "";
     public string UserKey { get; set; } = "";

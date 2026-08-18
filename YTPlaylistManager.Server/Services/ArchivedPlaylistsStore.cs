@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace YTPlaylistManager.Server.Services;
 
 public sealed class ArchivedPlaylistEntry
@@ -16,39 +14,15 @@ public sealed class ArchivedPlaylistEntry
 /// Persiste el registro de playlists "archivadas" localmente (porque se
 /// consolidaron en otra). El concepto es local: no borra de YouTube.
 /// </summary>
-public class ArchivedPlaylistsStore
+public sealed class ArchivedPlaylistsStore(IConfiguration cfg)
+    : JsonListStore<ArchivedPlaylistEntry>(cfg, "archived-playlists.json")
 {
-    private readonly string _path;
-    private readonly object _lock = new();
-
-    public ArchivedPlaylistsStore(IConfiguration cfg)
+    public void Add(IEnumerable<ArchivedPlaylistEntry> entries) => Mutate(list =>
     {
-        var folder = cfg["Storage:DataFolder"] ?? "./data";
-        Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, "archived-playlists.json");
-    }
-
-    public List<ArchivedPlaylistEntry> LoadAll()
-    {
-        lock (_lock)
+        foreach (var e in entries)
         {
-            if (!File.Exists(_path)) return [];
-            return JsonSerializer.Deserialize<List<ArchivedPlaylistEntry>>(File.ReadAllText(_path)) ?? [];
+            list.RemoveAll(x => x.Id == e.Id);
+            list.Add(e);
         }
-    }
-
-    public void Add(IEnumerable<ArchivedPlaylistEntry> entries)
-    {
-        lock (_lock)
-        {
-            var list = LoadAll();
-            foreach (var e in entries)
-            {
-                list.RemoveAll(x => x.Id == e.Id);
-                list.Add(e);
-            }
-            File.WriteAllText(_path,
-                JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
-        }
-    }
+    });
 }

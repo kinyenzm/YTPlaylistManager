@@ -9,6 +9,9 @@
 
   <p class="muted">{{ 'cache.intro' | translate }}</p>
 
+  @if (!connected()) {
+    <p class="muted"><i class="fa-brands fa-google"></i> {{ 'cross.connect_prompt' | translate }}</p>
+  }
   @if (isLoading()) {
     <app-skeleton-list variant="stat" [count]="4" />
   }

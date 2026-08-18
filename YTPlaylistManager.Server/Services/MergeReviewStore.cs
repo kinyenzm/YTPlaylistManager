@@ -1,32 +1,11 @@
-using System.Text.Json;
 using YTPlaylistManager.Server.Domain.Entities;
 
 namespace YTPlaylistManager.Server.Services;
 
 /// <summary>
-/// Cola de planes de merge en revisión. Se persiste en JSON local — sobrevive
-/// reinicios. El usuario revisa cada plan (qué canciones se agregarían, qué
-/// playlists se archivarían) y decide aplicar o descartar.
+/// Historial de planes de merge en revisión (solo lectura: alimenta la pestaña
+/// Revisiones). El flujo que los escribía fue reemplazado por el panel de
+/// pendientes; los registros existentes se conservan como histórico.
 /// </summary>
-public class MergeReviewStore
-{
-    private readonly string _path;
-    private readonly object _lock = new();
-
-    public MergeReviewStore(IConfiguration cfg)
-    {
-        var folder = cfg["Storage:DataFolder"] ?? "./data";
-        Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, "merge-reviews.json");
-    }
-
-    public List<MergeReviewPlan> LoadAll()
-    {
-        lock (_lock)
-        {
-            if (!File.Exists(_path)) return [];
-            return JsonSerializer.Deserialize<List<MergeReviewPlan>>(File.ReadAllText(_path)) ?? [];
-        }
-    }
-
-}
+public sealed class MergeReviewStore(IConfiguration cfg)
+    : JsonListStore<MergeReviewPlan>(cfg, "merge-reviews.json");

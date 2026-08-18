@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace YTPlaylistManager.Server.Services;
 
 /// <summary>
@@ -14,19 +12,10 @@ public sealed class QuotaState
     public int Used { get; set; }
 }
 
-public class QuotaTracker
+public sealed class QuotaTracker(IConfiguration cfg)
+    : JsonFileStore(cfg, "quota.json")
 {
-    private readonly string _path;
-    private readonly object _lock = new();
-    private readonly int _limit;
-
-    public QuotaTracker(IConfiguration cfg)
-    {
-        var folder = cfg["Storage:DataFolder"] ?? "./data";
-        Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, "quota.json");
-        _limit = int.TryParse(cfg["YouTube:DailyQuota"], out var q) ? q : 10000;
-    }
+    private readonly int _limit = int.TryParse(cfg["YouTube:DailyQuota"], out var q) ? q : 10000;
 
     private static string Today()
     {
@@ -43,7 +32,7 @@ public class QuotaTracker
 
     public (int Used, int Limit, string Date) Get()
     {
-        lock (_lock)
+        lock (Sync)
         {
             var s = Load();
             return (s.Used, _limit, s.Date);
@@ -54,7 +43,7 @@ public class QuotaTracker
     public void Add(int units)
     {
         if (units <= 0) return;
-        lock (_lock)
+        lock (Sync)
         {
             var s = Load();
             s.Used += units;
@@ -69,7 +58,7 @@ public class QuotaTracker
     /// </summary>
     public void MarkExhausted()
     {
-        lock (_lock)
+        lock (Sync)
         {
             var s = Load();
             if (s.Used >= _limit) return;
@@ -90,9 +79,7 @@ public class QuotaTracker
     private QuotaState Load()
     {
         var today = Today();
-        QuotaState s = File.Exists(_path)
-            ? (JsonSerializer.Deserialize<QuotaState>(File.ReadAllText(_path)) ?? new QuotaState())
-            : new QuotaState();
+        var s = Read<QuotaState>() ?? new QuotaState();
         if (s.Date != today)   // cambió el día → reinicio automático
         {
             s = new QuotaState { Date = today, Used = 0 };
@@ -101,5 +88,5 @@ public class QuotaTracker
         return s;
     }
 
-    private void Save(QuotaState s) => File.WriteAllText(_path, JsonSerializer.Serialize(s));
+    private void Save(QuotaState s) => Write(s, indented: false);
 }

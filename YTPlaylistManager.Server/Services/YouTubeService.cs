@@ -61,15 +61,26 @@ public class YouTubeService : IYouTubeService
         _logger = logger;
     }
 
-    /// <summary>Clave estable por cuenta. No gasta cuota.</summary>
+    private string? _userKey;
+
+    /// <summary>
+    /// Clave estable por cuenta. No gasta cuota. Se memoriza por request (el servicio
+    /// es Scoped): antes cada llamada releía el archivo del token y recalculaba el hash,
+    /// y una sola petición la consulta más de veinte veces.
+    /// </summary>
     private string CurrentUserKey()
     {
+        if (_userKey is not null) return _userKey;
         var t = _tokenStore.Load();
         // Preferencia: AccountId (channel id, estable entre logins). Fallback legado:
         // refresh token — rota si Google emite uno nuevo y fragmenta los datos.
-        if (!string.IsNullOrEmpty(t?.AccountId)) return UserKeys.FromSeed(t.AccountId);
-        return UserKeys.FromSeed(t?.RefreshToken ?? "anon");
+        return _userKey = UserKeys.FromSeed(
+            !string.IsNullOrEmpty(t?.AccountId) ? t.AccountId : t?.RefreshToken ?? "anon");
     }
+
+    /// <summary>Título de una playlist según la caché de la lista; el id si no está.</summary>
+    private string TitleOf(string playlistId) =>
+        _cacheStore.Load()?.Playlists.FirstOrDefault(p => p.Id == playlistId)?.Title ?? playlistId;
 
     /// <summary>
     /// Ids de playlists vigentes según la caché de la lista (0 cuota). Devuelve null si
@@ -458,7 +469,7 @@ public class YouTubeService : IYouTubeService
         var userKey = CurrentUserKey();
         var cache = _cacheStore.Load();
         var targetId = req.TargetPlaylistId;
-        var targetTitle = cache?.Playlists?.FirstOrDefault(p => p.Id == targetId)?.Title ?? targetId;
+        var targetTitle = TitleOf(targetId);
         var warnings = new List<string>();
 
         var targetItems = _itemsCache.Load(userKey, targetId);
@@ -476,7 +487,7 @@ public class YouTubeService : IYouTubeService
         foreach (var src in req.SourcePlaylistIds.Distinct())
         {
             if (src == targetId) continue;
-            var srcTitle = cache?.Playlists?.FirstOrDefault(p => p.Id == src)?.Title ?? src;
+            var srcTitle = TitleOf(src);
             var items = _itemsCache.Load(userKey, src);
             if (items is null)
             {
@@ -525,7 +536,7 @@ public class YouTubeService : IYouTubeService
 
         var targetId = req.TargetPlaylistId;
         var cache = _cacheStore.Load();
-        var targetTitle = cache?.Playlists?.FirstOrDefault(p => p.Id == targetId)?.Title ?? targetId;
+        var targetTitle = TitleOf(targetId);
 
         // Unión EN LOCAL (0 cuota): trabajamos sobre la caché de items.
         var targetItems = _itemsCache.Load(userKey, targetId) ?? new List<PlaylistItemDto>();
@@ -543,7 +554,7 @@ public class YouTubeService : IYouTubeService
         foreach (var src in req.SourcePlaylistIds.Distinct())
         {
             if (src == targetId) continue;
-            var srcTitle = cache?.Playlists?.FirstOrDefault(p => p.Id == src)?.Title ?? src;
+            var srcTitle = TitleOf(src);
             var items = _itemsCache.Load(userKey, src);
             if (items is null) continue;   // lista origen no cargada → se omite (el preview avisa)
             sourcesUsed.Add(new PendingSource { Id = src, Title = srcTitle });
@@ -1063,7 +1074,7 @@ public class YouTubeService : IYouTubeService
 
     /// <summary>Playlists (ids) donde está actualmente la canción (solo caché, 0 cuota).</summary>
     public List<string> GetSongLocations(string videoId) =>
-        CurrentSongLocations(CurrentUserKey(), videoId).Keys.ToList();
+        GetSongLocationsBatch([videoId]).GetValueOrDefault(videoId) ?? [];
 
     /// <summary>Items de una lista SOLO desde caché (0 cuota, nunca toca YouTube). Vacío si no está cargada.</summary>
     public List<PlaylistItemDto> GetCachedItems(string playlistId) =>
@@ -1090,7 +1101,7 @@ public class YouTubeService : IYouTubeService
                     "YouTube no permite modificar sus listas automáticas (Favoritos, Ver más tarde, " +
                     "Me gusta) desde la API. Elegí otra lista destino.");
             targetId = req.TargetPlaylistId;
-            targetTitle = _cacheStore.Load()?.Playlists.FirstOrDefault(p => p.Id == targetId)?.Title ?? targetId;
+            targetTitle = TitleOf(targetId);
         }
         else
         {
@@ -1257,7 +1268,7 @@ public class YouTubeService : IYouTubeService
         if (string.IsNullOrEmpty(playlistId) || playlistItemIds is null || playlistItemIds.Count == 0) return 0;
         var userKey = CurrentUserKey();
         var cache = _cacheStore.Load();
-        var title = cache?.Playlists?.FirstOrDefault(p => p.Id == playlistId)?.Title ?? playlistId;
+        var title = TitleOf(playlistId);
         var items = _itemsCache.Load(userKey, playlistId);
         if (items is null) return 0;
 

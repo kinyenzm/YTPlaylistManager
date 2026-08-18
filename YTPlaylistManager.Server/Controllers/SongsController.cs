@@ -7,138 +7,97 @@ namespace YTPlaylistManager.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SongsController : ControllerBase
+[RequireGoogleSession]
+public sealed class SongsController(ISongSearchService searchService, IYouTubeService youtube) : ControllerBase
 {
-    private readonly ISongSearchService _searchService;
-    private readonly IYouTubeService _youtube;
-    private readonly ILogger<SongsController> _logger;
-
-    public SongsController(ISongSearchService searchService, IYouTubeService youtube, ILogger<SongsController> logger)
-    {
-        _searchService = searchService;
-        _youtube = youtube;
-        _logger = logger;
-    }
 
     /// <summary>
     /// Búsqueda bidireccional de canciones en caché.
     /// Soporta búsqueda por videoId (exacto + parcial) y por nombre (fuzzy + normalizado).
     /// </summary>
     [HttpPost("search")]
-    [RequireGoogleSession]
     public ActionResult<List<SongSearchResultDto>> Search([FromBody] SongSearchQueryDto query)
     {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(query.VideoIdPartial) && string.IsNullOrWhiteSpace(query.SongNameFuzzy))
-                return BadRequest(new { message = "Debe proporcionar videoIdPartial o songNameFuzzy" });
+        if (string.IsNullOrWhiteSpace(query.VideoIdPartial) && string.IsNullOrWhiteSpace(query.SongNameFuzzy))
+            return BadRequest(new { message = "Debe proporcionar videoIdPartial o songNameFuzzy" });
 
-            var results = _searchService.SearchCombined(
-                query.VideoIdPartial,
-                query.SongNameFuzzy,
-                query.SearchScope
-            );
-
-            _logger.LogInformation(
-                "Search completed: videoId={VideoId}, name={Name}, scope={Scope}, results={Count}",
-                query.VideoIdPartial, query.SongNameFuzzy, query.SearchScope, results.Count
-            );
-
-            return Ok(results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in search endpoint");
-            return StatusCode(500, new { message = "Error al buscar canciones", error = ex.Message });
-        }
+        return Ok(searchService.SearchCombined(query.VideoIdPartial, query.SongNameFuzzy, query.SearchScope));
     }
 
     /// <summary>Por playlist: cuántas canciones (videos disponibles) están también en otra lista. 100% caché, 0 cuota.</summary>
     [HttpGet("duplicate-counts")]
-    [RequireGoogleSession]
     [ProducesResponseType<Dictionary<string, int>>(StatusCodes.Status200OK)]
     public IActionResult DuplicateCounts()
-        => Ok(_searchService.GetDuplicateCountsByPlaylist());
+        => Ok(searchService.GetDuplicateCountsByPlaylist());
 
     // ── Asignar una canción a varias/una playlist (staged: local → pendiente → subir) ──
 
     /// <summary>Aplica en local la reasignación de una canción y la deja pendiente de subir.</summary>
     [HttpPost("assign")]
-    [RequireGoogleSession]
     [ProducesResponseType<PendingSongMoveDto>(StatusCodes.Status200OK)]
     public IActionResult Assign([FromBody] AssignSongRequest req)
-        => Ok(_youtube.StageSongAssignment(req));
+        => Ok(youtube.StageSongAssignment(req));
 
     /// <summary>Playlists (ids) donde está la canción ahora (caché, 0 cuota).</summary>
     [HttpGet("{videoId}/locations")]
-    [RequireGoogleSession]
     [ProducesResponseType<List<string>>(StatusCodes.Status200OK)]
     public IActionResult Locations(string videoId)
-        => Ok(_youtube.GetSongLocations(videoId));
+        => Ok(youtube.GetSongLocations(videoId));
 
     /// <summary>Ubicaciones de varias canciones a la vez (videoId → ids de listas).</summary>
     [HttpPost("locations")]
-    [RequireGoogleSession]
     public IActionResult LocationsBatch([FromBody] List<string> videoIds)
-        => Ok(_youtube.GetSongLocationsBatch(videoIds));
+        => Ok(youtube.GetSongLocationsBatch(videoIds));
 
     /// <summary>Encola quitar copias específicas (por playlistItemId) de una playlist (staged).</summary>
     [HttpPost("remove-items")]
-    [RequireGoogleSession]
     public IActionResult RemoveItems([FromBody] RemoveItemsRequest req)
-        => Ok(new { staged = _youtube.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
+        => Ok(new { staged = youtube.StageRemoveItemsFromPlaylist(req.PlaylistId, req.PlaylistItemIds) });
 
     /// <summary>
     /// Canciones huérfanas: conocidas por la app pero fuera de todas las playlists
     /// actuales (listas borradas, remociones). 0 cuota — solo caché y actividad.
     /// </summary>
     [HttpGet("recoverable")]
-    [RequireGoogleSession]
     [ProducesResponseType<List<RecoverableSongDto>>(StatusCodes.Status200OK)]
     public IActionResult Recoverable()
-        => Ok(_youtube.GetRecoverableSongs());
+        => Ok(youtube.GetRecoverableSongs());
 
     /// <summary>
     /// Encola la recuperación (lista existente o nueva) como pendiente de subida
     /// reanudable; la subida real se hace desde el panel de pendientes.
     /// </summary>
     [HttpPost("recover")]
-    [RequireGoogleSession]
     [ProducesResponseType<PendingUploadDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Recover([FromBody] RecoverSongsRequest req, CancellationToken ct)
-        => Ok(await _youtube.StageRecoveryAsync(req, ct));
+        => Ok(await youtube.StageRecoveryAsync(req, ct));
 
     [HttpGet("pending-moves")]
-    [RequireGoogleSession]
     [ProducesResponseType<List<PendingSongMoveDto>>(StatusCodes.Status200OK)]
     public IActionResult PendingMoves()
-        => Ok(_youtube.GetPendingSongMoves());
+        => Ok(youtube.GetPendingSongMoves());
 
     [HttpPost("pending-moves/{id}/upload")]
-    [RequireGoogleSession]
     [ProducesResponseType<SongMoveUploadResultDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadMove(string id, CancellationToken ct)
-        => Ok(await _youtube.UploadSongMoveAsync(id, ct));
+        => Ok(await youtube.UploadSongMoveAsync(id, ct));
 
     [HttpPost("pending-moves/upload-all")]
-    [RequireGoogleSession]
     [ProducesResponseType<SongMoveBulkResultDto>(StatusCodes.Status200OK)]
     public async Task<IActionResult> UploadAllMoves(CancellationToken ct)
-        => Ok(await _youtube.UploadAllSongMovesAsync(ct));
+        => Ok(await youtube.UploadAllSongMovesAsync(ct));
 
     [HttpDelete("pending-moves/{id}")]
-    [RequireGoogleSession]
     public IActionResult DiscardMove(string id)
     {
-        _youtube.DiscardSongMove(id);
+        youtube.DiscardSongMove(id);
         return NoContent();
     }
 
     [HttpDelete("pending-moves")]
-    [RequireGoogleSession]
     public IActionResult DiscardAllMoves()
     {
-        _youtube.DiscardAllSongMoves();
+        youtube.DiscardAllSongMoves();
         return NoContent();
     }
 }

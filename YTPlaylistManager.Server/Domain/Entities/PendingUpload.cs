@@ -5,7 +5,7 @@ namespace YTPlaylistManager.Server.Domain.Entities;
 /// Guarda exactamente las canciones que faltan agregar en la lista destino
 /// para que el usuario las revise y las suba cuando quiera.
 /// </summary>
-public sealed class PendingUpload
+public sealed class PendingUpload : Services.IUserScopedPlan
 {
     public string Id { get; set; } = "";
     public string UserKey { get; set; } = "";

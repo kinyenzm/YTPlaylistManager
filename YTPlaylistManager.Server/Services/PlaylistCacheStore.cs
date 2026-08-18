@@ -1,4 +1,3 @@
-using System.Text.Json;
 using YTPlaylistManager.Server.DTOs;
 
 namespace YTPlaylistManager.Server.Services;
@@ -8,43 +7,27 @@ namespace YTPlaylistManager.Server.Services;
 /// con la misma cuenta sin volver a pedir a YouTube (0 cuota) y servir de fallback
 /// cuando la API falla (cuota agotada/red).
 /// </summary>
-public class PlaylistCacheStore
+public sealed class PlaylistCacheStore(IConfiguration cfg)
+    : JsonFileStore(cfg, "playlist-cache.json")
 {
-    private readonly string _path;
-    private readonly object _lock = new();
-
-    public PlaylistCacheStore(IConfiguration cfg)
-    {
-        var folder = cfg["Storage:DataFolder"] ?? "./data";
-        Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, "playlist-cache.json");
-    }
-
     public PlaylistCache? Load()
     {
-        lock (_lock)
-        {
-            if (!File.Exists(_path)) return null;
-            return JsonSerializer.Deserialize<PlaylistCache>(File.ReadAllText(_path));
-        }
+        lock (Sync) return Read<PlaylistCache>();
     }
 
     public void Save(PlaylistCache cache)
     {
-        lock (_lock)
-        {
-            File.WriteAllText(_path, JsonSerializer.Serialize(cache, new JsonSerializerOptions { WriteIndented = true }));
-        }
+        lock (Sync) Write(cache);
     }
 
     /// <summary>Re-etiqueta la caché a la clave nueva (migración de UserKey).</summary>
     public void MigrateToKey(string newKey)
     {
-        lock (_lock)
+        lock (Sync)
         {
-            var cache = Load();
+            var cache = Read<PlaylistCache>();
             if (cache is null || cache.UserKey == newKey) return;
-            Save(new PlaylistCache
+            Write(new PlaylistCache
             {
                 UserKey = newKey,
                 CachedAtUtc = cache.CachedAtUtc,

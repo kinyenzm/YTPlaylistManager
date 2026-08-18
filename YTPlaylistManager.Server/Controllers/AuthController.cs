@@ -148,7 +148,8 @@ public sealed class AuthController(
                 AccessToken = "",
                 RefreshToken = prev.RefreshToken,
                 ExpiresAtUtc = DateTime.MinValue,
-                Scope = prev.Scope
+                Scope = prev.Scope,
+                AccountId = prev.AccountId,   // sin esto el UserKey cambiaba al reconectar
             });
         else
             store.Clear();
