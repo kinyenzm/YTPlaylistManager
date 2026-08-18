@@ -184,6 +184,53 @@ header.app-header a:not(h2 a)::after {
 header.app-header a:not(h2 a):hover { color: var(--text); }
 header.app-header a:not(h2 a):hover::after { right: 0; }
 
+/* Los enlaces que solo envuelven un botón (Conectar con Google) no son ítems de menú:
+   sin subrayado deslizante debajo de la píldora. */
+header.app-header a:not(h2 a):has(> button) { padding: 0; }
+header.app-header a:not(h2 a):has(> button)::after { content: none; }
+
+/* ── CTA de conexión (header y toast de sesión): hover con brillo que barre ── */
+header.app-header a > button,
+.session-toast a > button {
+  position: relative;
+  overflow: hidden;
+}
+/* El barrido va por ENCIMA del fondo (sin z-index negativo: quedaría tapado). */
+header.app-header a > button::before,
+.session-toast a > button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-130%);
+  transition: transform 0.5s cubic-bezier(.4, 0, .2, 1);
+  pointer-events: none;
+}
+header.app-header a > button:hover::before,
+.session-toast a > button:hover::before {
+  transform: translateX(130%);
+}
+header.app-header a > button:hover,
+.session-toast a > button:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow:
+    0 0 0 1px rgba(198, 242, 78, 0.4),
+    0 6px 20px -6px rgba(198, 242, 78, 0.5);
+}
+header.app-header a > button:active,
+.session-toast a > button:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px -4px rgba(198, 242, 78, 0.4);
+}
+button:focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  header.app-header a > button::before,
+  .session-toast a > button::before { transition: none; }
+}
+
 main {
   padding: clamp(20px, 4vw, 40px);
   max-width: 1180px;
