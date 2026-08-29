@@ -63,13 +63,15 @@ export class RecoverTab {
     return list.every((r) => sel.has(r.videoId));
   });
 
-  protected thumb(videoId: string): string {
-    return thumbUrl(videoId);
+  constructor() {
+    // Carga al nacer: el contenedor solo renderiza esta pestaña con sesión activa.
+    // Antes el padre la disparaba con setTimeout + viewChild y en zoneless corría
+    // antes de que el hijo existiera: la lista quedaba vacía y sin botón de recuperar.
+    this.load();
   }
 
-  /** La carga es perezosa: solo al entrar por primera vez a la pestaña. */
-  ensureLoaded(): void {
-    if (!this.loaded()) this.load();
+  protected thumb(videoId: string): string {
+    return thumbUrl(videoId);
   }
 
   load(): void {

@@ -206,7 +206,6 @@ export class CrossDuplicates {
     this.mode.set(m);
     this.closeEditor();
     this.error.set(null);
-    if (m === 'recover') setTimeout(() => this.recoverTab()?.ensureLoaded(), 0);
   }
 
   private loadPlaylists(): void {
