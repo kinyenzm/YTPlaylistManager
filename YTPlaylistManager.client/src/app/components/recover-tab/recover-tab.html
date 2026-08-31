@@ -58,6 +58,13 @@
               <i class="fa-solid fa-clock-rotate-left cross-org__meta-icon"></i>{{ 'cross.recover_last_seen' | translate }}
             </span>
             <span class="tag">{{ r.lastKnownPlaylist }}</span>
+            @if (r.existsByTitle) {
+              <span class="tag" [title]="'cross.recover_exists_by_title_hint' | translate">
+                {{ 'cross.recover_exists_by_title' | translate }}
+              </span>
+            } @else {
+              <span class="tag tag--danger">{{ 'cross.recover_missing_everywhere' | translate }}</span>
+            }
           </div>
         </div>
       </div>

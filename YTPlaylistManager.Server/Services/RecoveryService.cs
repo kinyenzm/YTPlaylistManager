@@ -34,12 +34,27 @@ public sealed class RecoveryService(
         foreach (var a in archivedStore.LoadAll())
             titleByPlaylist.TryAdd(a.Id, a.Title);
 
-        // Presentes hoy: todo videoId en los items cacheados de playlists vigentes.
+        // Presentes hoy: todo videoId en los items cacheados de playlists vigentes, y
+        // sus títulos normalizados — para distinguir "no existe en ninguna forma" de
+        // "existe la misma canción con otro video" (misma música, otra subida).
         var present = new HashSet<string>(StringComparer.Ordinal);
+        var presentTitles = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (playlistId, entry) in snapshot)
             if (currentPlaylists.Contains(playlistId))
                 foreach (var it in entry.Items)
-                    if (!string.IsNullOrEmpty(it.VideoId)) present.Add(it.VideoId);
+                {
+                    if (string.IsNullOrEmpty(it.VideoId)) continue;
+                    present.Add(it.VideoId);
+                    if (VideoAvailability.IsUnavailable(it.Title)) continue;
+                    var norm = DuplicateService.Normalize(it.Title);
+                    if (!string.IsNullOrWhiteSpace(norm)) presentTitles.Add(norm);
+                }
+
+        bool ExistsByTitle(string title)
+        {
+            var norm = DuplicateService.Normalize(title);
+            return !string.IsNullOrWhiteSpace(norm) && presentTitles.Contains(norm);
+        }
 
         var orphans = new Dictionary<string, RecoverableSongDto>(StringComparer.Ordinal);
 
@@ -54,7 +69,8 @@ public sealed class RecoveryService(
                 if (VideoAvailability.IsUnavailable(it.Title)) continue;
                 if (!orphans.ContainsKey(it.VideoId))
                     orphans[it.VideoId] = new RecoverableSongDto(
-                        it.VideoId, it.Title, it.ChannelTitle, it.ThumbnailUrl, listName, entry.CachedAtUtc);
+                        it.VideoId, it.Title, it.ChannelTitle, it.ThumbnailUrl, listName, entry.CachedAtUtc,
+                        ExistsByTitle(it.Title));
             }
         }
 
@@ -68,7 +84,8 @@ public sealed class RecoveryService(
             orphans[e.VideoId] = new RecoverableSongDto(
                 e.VideoId, e.Title, null,
                 $"https://i.ytimg.com/vi/{e.VideoId}/default.jpg",
-                e.Playlist, e.At);
+                e.Playlist, e.At,
+                ExistsByTitle(e.Title));
         }
 
         return orphans.Values

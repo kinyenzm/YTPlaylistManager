@@ -309,7 +309,8 @@ public record RecoverableSongDto(
     string? ChannelTitle,
     string? ThumbnailUrl,
     string LastKnownPlaylist,   // dónde se la vio por última vez (lista borrada o evento)
-    DateTime? LastSeenUtc
+    DateTime? LastSeenUtc,
+    bool ExistsByTitle = false  // hay una canción con el mismo título (otro video) en las listas actuales
 );
 
 public record RecoverSongItemDto(string VideoId, string Title, string? ChannelTitle, string? ThumbnailUrl);

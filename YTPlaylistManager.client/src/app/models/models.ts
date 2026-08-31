@@ -213,6 +213,8 @@ export interface RecoverableSong {
   thumbnailUrl?: string | null;
   lastKnownPlaylist: string;
   lastSeenUtc?: string | null;
+  // La misma canción (título) existe en las listas actuales con otro video.
+  existsByTitle: boolean;
 }
 
 // ── Auditoría y trazabilidad ──

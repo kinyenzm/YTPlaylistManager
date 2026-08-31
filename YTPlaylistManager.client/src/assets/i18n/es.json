@@ -180,7 +180,10 @@
     "unavailable_tag": "No disponible",
     "dups_in_list": "{{n}} repetidas",
     "copies_badge": "×{{n}} en esta lista",
-    "copies_hint": "El mismo video está varias veces en esta lista. Usa «Buscar duplicadas» para quitar copias sueltas."
+    "copies_hint": "El mismo video está varias veces en esta lista. Usa «Buscar duplicadas» para quitar copias sueltas.",
+    "recover_missing_everywhere": "No existe en tus playlists actuales",
+    "recover_exists_by_title": "Existe con otro video",
+    "recover_exists_by_title_hint": "Una canción con el mismo título ya está en tus listas, subida como otro video. Recuperarla duplicaría la música."
   },
   "pending": {
     "chip": "{{n}} sin subir",
