@@ -6,6 +6,7 @@ import {
   PendingUpload, UploadResult, PendingSongMove, SongMoveUploadResult, SongMoveBulkResult, Quota,
   ClassifyResult, AuthStatus, CrossDuplicateReport,
   SongSearchQuery, SongSearchResult, RecoverableSong, CacheStatus, SongMovementLog,
+  BackupStatus, BackupImportResult,
   PlaylistArchivedInfo, MergeReviewSummary, ActivityItem
 } from '../models/models';
 import { environment } from '../../environments/environment';
@@ -22,6 +23,25 @@ export class ApiService {
   loginUrl(): string { return `${this.base}/auth/login`; }
   authStatus(): Observable<AuthStatus> { return this.http.get<AuthStatus>(`${this.base}/auth/status`); }
   logout(): Observable<unknown> { return this.http.post(`${this.base}/auth/logout`, {}); }
+
+  // --- Respaldo (registro local ↔ archivo .json ↔ Google Drive) ---
+  exportBackup(): Observable<Blob> {
+    return this.http.get(`${this.base}/backup/export`, { responseType: 'blob' });
+  }
+  importBackup(file: File): Observable<BackupImportResult> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<BackupImportResult>(`${this.base}/backup/import`, form);
+  }
+  backupStatus(): Observable<BackupStatus> {
+    return this.http.get<BackupStatus>(`${this.base}/backup/status`);
+  }
+  driveBackup(): Observable<unknown> {
+    return this.http.post(`${this.base}/backup/drive/upload`, {});
+  }
+  driveRestore(): Observable<BackupImportResult> {
+    return this.http.post<BackupImportResult>(`${this.base}/backup/drive/restore`, {});
+  }
 
   // --- Playlists ---
   listPlaylists(refresh = false, includeArchived = false): Observable<Playlist[]> {

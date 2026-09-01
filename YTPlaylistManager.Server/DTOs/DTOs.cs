@@ -195,7 +195,25 @@ public record QuotaDto(int Used, int Limit, int Remaining, string Date);
 
 public record StagedCountDto(int Staged);
 
-public record AuthStatusDto(bool IsAuthenticated, DateTime? ExpiresAtUtc, bool HasRefreshToken);
+public record AuthStatusDto(
+    bool IsAuthenticated,
+    DateTime? ExpiresAtUtc,
+    bool HasRefreshToken,
+    bool DriveBackupEnabled = false   // el grant vigente incluye el scope drive.appdata
+);
+
+// ── Respaldo ──
+
+public record BackupStatusDto(
+    bool DriveBackupEnabled,
+    DateTime? LastDriveBackupUtc,     // ultima subida hecha desde esta maquina
+    DateTime? DriveFileModifiedUtc,   // fecha del archivo en Drive (fuente de verdad)
+    long? DriveFileSize
+);
+
+public record BackupImportResultDto(int RestoredStores);
+
+public record BackupErrorDto(string Code, string Message);
 
 public record AckDto(bool Ok);
 

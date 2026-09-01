@@ -18,6 +18,16 @@ public sealed class ActivityBroadcaster : JsonFileStore
         _log = Read<List<ActivityEvent>>() ?? [];
     }
 
+    /// <summary>Relee el log del disco (los archivos cambiaron por fuera: import de respaldo).</summary>
+    public void Reload()
+    {
+        lock (Sync)
+        {
+            _log.Clear();
+            _log.AddRange(Read<List<ActivityEvent>>() ?? []);
+        }
+    }
+
     /// <summary>Historial persistido, más reciente primero.</summary>
     public List<ActivityEvent> History(int max = 200)
     {

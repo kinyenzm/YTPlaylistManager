@@ -13,19 +13,27 @@ public sealed class AuthController(
     IHttpClientFactory httpFactory,
     GoogleTokenStore store,
     QuotaTracker quota,
-    PlaylistItemsCacheStore itemsCache,
-    PlaylistCacheStore playlistCache,
-    PendingUploadStore pendingUploads,
-    PendingSongMoveStore songMoves,
+    UserKeyMigration migration,
     GoogleSessionValidator validator) : ControllerBase
 {
     // Inicia el flujo OAuth2 redirigiendo al consent screen de Google.
     [HttpGet("login")]
-    public IActionResult Login()
+    public IActionResult Login([FromQuery] bool consent = false)
     {
         var clientId = cfg["Google:ClientId"];
         var redirect = cfg["Google:RedirectUri"];
-        var scopes = string.Join(" ", cfg.GetSection("Google:Scopes").Get<string[]>() ?? Array.Empty<string>());
+        var scopeList = cfg.GetSection("Google:Scopes").Get<string[]>() ?? [];
+        var scopes = string.Join(" ", scopeList);
+
+        // Google solo emite refresh_token en la PRIMERA autorizacion o con
+        // prompt=consent. Sin refresh guardado (p. ej. tras formatear) o con scopes
+        // configurados que el grant vigente no tiene, hay que forzar el consent;
+        // si no, la sesion nueva muere en una hora.
+        var stored = store.Load();
+        var granted = (stored?.Scope ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var needsConsent = consent
+            || string.IsNullOrEmpty(stored?.RefreshToken)
+            || !scopeList.All(granted.Contains);
 
         var url = "https://accounts.google.com/o/oauth2/v2/auth"
             + $"?client_id={Uri.EscapeDataString(clientId!)}"
@@ -33,7 +41,8 @@ public sealed class AuthController(
             + "&response_type=code"
             + $"&scope={Uri.EscapeDataString(scopes)}"
             + "&access_type=offline"
-            + "&prompt=select_account";
+            + "&include_granted_scopes=true"
+            + $"&prompt={Uri.EscapeDataString(needsConsent ? "consent select_account" : "select_account")}";
 
         return Redirect(url);
     }
@@ -110,11 +119,7 @@ public sealed class AuthController(
 
             // Migración one-shot: la app es single-user (un solo token file), así que
             // toda clave preexistente en los stores pertenece a esta misma cuenta.
-            var newKey = UserKeys.FromSeed(channelId);
-            itemsCache.MigrateToKey(newKey);
-            playlistCache.MigrateToKey(newKey);
-            pendingUploads.MigrateToKey(newKey);
-            songMoves.MigrateToKey(newKey);
+            migration.MigrateAll(UserKeys.FromSeed(channelId));
         }
         catch
         {
@@ -129,7 +134,8 @@ public sealed class AuthController(
         // access token venció, para no reportar "conectado" con un refresh revocado.
         var alive = await validator.IsAliveAsync(ct);
         var t = store.Load();
-        return Ok(new AuthStatusDto(alive, t?.ExpiresAtUtc, !string.IsNullOrEmpty(t?.RefreshToken)));
+        var driveOk = (t?.Scope ?? "").Split(' ').Contains(BackupService.DriveScope);
+        return Ok(new AuthStatusDto(alive, t?.ExpiresAtUtc, !string.IsNullOrEmpty(t?.RefreshToken), driveOk));
     }
 
     [HttpPost("logout")]

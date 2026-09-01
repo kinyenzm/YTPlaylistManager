@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0.3627" />
     <PackageReference Include="Google.Apis.YouTube.v3" Version="1.68.0.3513" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="10.0.2" />

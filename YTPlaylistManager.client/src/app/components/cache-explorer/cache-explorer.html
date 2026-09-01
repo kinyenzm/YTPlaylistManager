@@ -3,7 +3,7 @@
     <h2>{{ 'cache.title' | translate }}</h2>
     <div class="row">
       <button (click)="refreshCache()" class="secondary">{{ 'cache.refresh' | translate }}</button>
-      <button (click)="exportCacheAsJson()" class="secondary">{{ 'cache.export' | translate }}</button>
+      <button (click)="downloadBackup()" class="secondary">{{ 'cache.export' | translate }}</button>
     </div>
   </div>
 
@@ -54,6 +54,13 @@
       class="tab-btn"
     >
       {{ 'cache.tab_history' | translate }}
+    </button>
+    <button
+      (click)="switchTab('backup')"
+      [class.active]="activeTab() === 'backup'"
+      class="tab-btn"
+    >
+      {{ 'cache.tab_backup' | translate }}
     </button>
   </div>
 
@@ -192,6 +199,58 @@
   @if (activeTab() === 'history') {
     <div class="tab-content">
       <app-song-history />
+    </div>
+  }
+
+  @if (activeTab() === 'backup') {
+    <div class="tab-content">
+      <p class="muted">{{ 'cache.backup_intro' | translate }}</p>
+
+      @if (backupMsg(); as m) {
+        <div class="card card--accent pending__note">{{ m }}</div>
+      }
+      @if (backupError(); as e) {
+        <div class="card danger pending__note">{{ e }}</div>
+      }
+
+      <div class="card">
+        <strong>{{ 'cache.backup_local_title' | translate }}</strong>
+        <p class="muted">{{ 'cache.backup_local_desc' | translate }}</p>
+        <div class="row row--wrap">
+          <button (click)="downloadBackup()" [disabled]="backupBusy() !== null">
+            {{ (backupBusy() === 'export' ? 'cache.backup_exporting' : 'cache.backup_export') | translate }}
+          </button>
+          <input #importFile type="file" accept=".json,application/json" hidden (change)="onImportFile($event)" />
+          <button class="secondary" (click)="importFile.click()" [disabled]="backupBusy() !== null">
+            {{ (backupBusy() === 'import' ? 'cache.backup_importing' : 'cache.backup_import') | translate }}
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <strong>{{ 'cache.backup_drive_title' | translate }}</strong>
+        @if (driveBackupEnabled()) {
+          <p class="muted">
+            {{ 'cache.backup_drive_desc' | translate }}
+            @if (backupStatus()?.driveFileModifiedUtc; as at) {
+              <br />{{ 'cache.backup_last' | translate }} {{ at | date: 'medium' }}
+            } @else {
+              <br />{{ 'cache.backup_never' | translate }}
+            }
+          </p>
+          <div class="row row--wrap">
+            <button (click)="driveUpload()" [disabled]="backupBusy() !== null">
+              {{ (backupBusy() === 'drive-up' ? 'cache.backup_uploading' : 'cache.backup_drive_upload') | translate }}
+            </button>
+            <button class="secondary" (click)="driveRestore()" [disabled]="backupBusy() !== null">
+              {{ (backupBusy() === 'drive-down' ? 'cache.backup_restoring' : 'cache.backup_drive_restore') | translate }}
+            </button>
+          </div>
+        } @else {
+          <p class="muted">{{ 'cache.backup_scope_missing' | translate }}</p>
+          <a [href]="reconnectUrl"><button>{{ 'cache.backup_reconnect' | translate }}</button></a>
+        }
+      </div>
     </div>
   }
 </div>

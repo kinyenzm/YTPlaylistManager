@@ -17,6 +17,8 @@ export class AuthService {
   // null = aún no verificado; solo true habilita cargas de datos.
   readonly connected = computed(() => this.status()?.isAuthenticated === true);
   readonly checked = computed(() => this.status() !== null);
+  // El respaldo en Drive requiere el scope appdata en el grant vigente.
+  readonly driveBackupEnabled = computed(() => this.status()?.driveBackupEnabled === true);
   // Dispara el toast "sesión expirada" (401 a mitad de sesión, no logout manual).
   readonly sessionExpired = signal(false);
 

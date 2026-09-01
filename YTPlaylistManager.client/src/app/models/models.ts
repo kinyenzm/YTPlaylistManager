@@ -111,6 +111,21 @@ export interface AuthStatus {
   isAuthenticated: boolean;
   expiresAtUtc?: string;
   hasRefreshToken: boolean;
+  // El grant vigente incluye el scope de Drive (appdata) para el respaldo.
+  driveBackupEnabled?: boolean;
+}
+
+// ── Respaldo ──
+
+export interface BackupStatus {
+  driveBackupEnabled: boolean;
+  lastDriveBackupUtc?: string | null;   // última subida hecha desde esta máquina
+  driveFileModifiedUtc?: string | null; // fecha del archivo en Drive (fuente de verdad)
+  driveFileSize?: number | null;
+}
+
+export interface BackupImportResult {
+  restoredStores: number;
 }
 
 export interface CrossPlaylistRef {

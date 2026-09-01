@@ -137,6 +137,12 @@ public sealed class PlaylistItemsCacheStore(IConfiguration cfg)
         }
     }
 
+    /// <summary>Tira el documento en memoria (los archivos cambiaron por fuera: import de respaldo).</summary>
+    public void Reload()
+    {
+        lock (Sync) _doc = null;
+    }
+
     private Dictionary<string, Dictionary<string, CachedItems>> Doc()
         => _doc ??= Read<Dictionary<string, Dictionary<string, CachedItems>>>() ?? [];
 

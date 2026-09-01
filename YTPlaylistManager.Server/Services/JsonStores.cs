@@ -12,16 +12,31 @@ public abstract class JsonFileStore
     protected static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
     protected static readonly JsonSerializerOptions Compact = new() { WriteIndented = false };
 
-    protected readonly object Sync = new();
+    // Un solo lock para todos los stores: el import de respaldos reemplaza varios
+    // archivos como unidad y ningun Mutate en curso debe pisarlo. Nadie hace await
+    // bajo lock y Monitor es reentrante, asi que no hay riesgo de deadlock.
+    protected static readonly object Sync = new();
     private readonly string _path;
 
     protected string FilePath => _path;
 
     protected JsonFileStore(IConfiguration cfg, string fileName)
     {
+        _path = Path.Combine(ResolveDataFolder(cfg), fileName);
+    }
+
+    /// <summary>Unica fuente de la carpeta de datos (Storage:DataFolder).</summary>
+    public static string ResolveDataFolder(IConfiguration cfg)
+    {
         var folder = cfg["Storage:DataFolder"] ?? "./data";
         Directory.CreateDirectory(folder);
-        _path = Path.Combine(folder, fileName);
+        return folder;
+    }
+
+    /// <summary>Ejecuta bajo el lock global de los stores (import/export de respaldos).</summary>
+    public static void RunExclusive(Action fn)
+    {
+        lock (Sync) fn();
     }
 
     protected T? Read<T>() where T : class
@@ -31,7 +46,12 @@ public abstract class JsonFileStore
     }
 
     protected void Write<T>(T value, bool indented = true)
-        => File.WriteAllText(_path, JsonSerializer.Serialize(value, indented ? Indented : Compact));
+    {
+        // Escritura atomica: si el proceso muere a mitad, el archivo original queda intacto.
+        var tmp = _path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(value, indented ? Indented : Compact));
+        File.Move(tmp, _path, overwrite: true);
+    }
 
     protected void DeleteFile()
     {

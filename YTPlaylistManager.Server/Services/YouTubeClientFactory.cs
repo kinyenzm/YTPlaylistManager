@@ -25,7 +25,7 @@ public sealed class YouTubeClientFactory(GoogleTokenStore tokenStore, GoogleSess
             !string.IsNullOrEmpty(t?.AccountId) ? t.AccountId : t?.RefreshToken ?? "anon");
     }
 
-    public Google.Apis.YouTube.v3.YouTubeService BuildClient()
+    private UserCredential BuildCredential()
     {
         var token = tokenStore.Load()
             ?? throw new NotAuthenticatedException("No hay sesión Google activa. Visita /api/auth/login primero.");
@@ -43,12 +43,21 @@ public sealed class YouTubeClientFactory(GoogleTokenStore tokenStore, GoogleSess
             Scope = token.Scope
         };
 
-        var credential = new UserCredential(flow, "me", tokenResponse);
+        return new UserCredential(flow, "me", tokenResponse);
+    }
 
-        return new Google.Apis.YouTube.v3.YouTubeService(new BaseClientService.Initializer
+    public Google.Apis.YouTube.v3.YouTubeService BuildClient() =>
+        new(new BaseClientService.Initializer
         {
-            HttpClientInitializer = credential,
+            HttpClientInitializer = BuildCredential(),
             ApplicationName = "YTPlaylistManager"
         });
-    }
+
+    /// <summary>Cliente de Drive con la misma credencial (respaldo en appDataFolder).</summary>
+    public Google.Apis.Drive.v3.DriveService BuildDriveClient() =>
+        new(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = BuildCredential(),
+            ApplicationName = "YTPlaylistManager"
+        });
 }
