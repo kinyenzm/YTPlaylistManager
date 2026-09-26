@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, effect, signal, inject, OnDestroy } from '@angular/core';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { firstValueFrom, timeout, finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
@@ -17,7 +17,7 @@ import { Modal } from '../ui/modal';
 @Component({
   selector: 'app-pending-changes',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslateModule, EmptyState, Modal],
+  imports: [TranslatePipe, EmptyState, Modal],
   templateUrl: './pending-changes.html',
 })
 export class PendingChanges implements OnDestroy {

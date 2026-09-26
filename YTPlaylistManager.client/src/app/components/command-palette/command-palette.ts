@@ -11,7 +11,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { LowerCasePipe } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap, catchError } from 'rxjs/operators';
 import { ApiService } from '../../services/api.service';
@@ -28,7 +28,7 @@ type PaletteItem =
 @Component({
   selector: 'app-command-palette',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, LowerCasePipe, TranslateModule],
+  imports: [FormsModule, LowerCasePipe, TranslatePipe],
   templateUrl: './command-palette.html',
 })
 export class CommandPalette implements OnDestroy {

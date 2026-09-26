@@ -1,6 +1,6 @@
 import { Component, ChangeDetectionStrategy, signal, inject, input, effect, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
@@ -14,7 +14,7 @@ type Tab = 'dashboard' | 'archived' | 'reviews' | 'activity' | 'history' | 'back
 @Component({
   selector: 'app-cache-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, TranslateModule, SkeletonList, SongHistory],
+  imports: [DatePipe, TranslatePipe, SkeletonList, SongHistory],
   templateUrl: './cache-explorer.html',
 })
 export class CacheExplorer {

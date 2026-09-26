@@ -15,7 +15,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Title } from '@angular/platform-browser';
 import { debounceTime, delay, finalize, Subject } from 'rxjs';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
 import { AuthService } from '../../services/auth.service';
@@ -41,7 +41,7 @@ type Mode = 'repeated' | 'byList' | 'bySong' | 'recover';
   selector: 'app-cross-duplicates',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    RouterLink, FormsModule, TranslateModule,
+    RouterLink, FormsModule, TranslatePipe,
     AssignModal, ListTools, RecoverTab, SongCard,
     EmptyState, SkeletonList,
   ],

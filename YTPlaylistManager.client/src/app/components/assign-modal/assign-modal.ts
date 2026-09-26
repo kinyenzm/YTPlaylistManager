@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { DraftsService } from '../../services/drafts.service';
@@ -14,7 +14,7 @@ import { SkeletonList } from '../ui/skeleton-list';
 @Component({
   selector: 'app-assign-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslateModule, Modal, SkeletonList],
+  imports: [TranslatePipe, Modal, SkeletonList],
   templateUrl: './assign-modal.html',
 })
 export class AssignModal {

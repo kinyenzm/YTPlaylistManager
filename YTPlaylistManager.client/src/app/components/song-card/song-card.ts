@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { DraftsService } from '../../services/drafts.service';
 import { thumbUrl } from '../../utils/youtube.utils';
 
@@ -11,7 +11,7 @@ import { thumbUrl } from '../../utils/youtube.utils';
 @Component({
   selector: 'app-song-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslateModule],
+  imports: [TranslatePipe],
   templateUrl: './song-card.html',
 })
 export class SongCard {

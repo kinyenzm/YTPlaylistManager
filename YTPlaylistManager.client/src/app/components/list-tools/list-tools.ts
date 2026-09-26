@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
@@ -15,7 +15,7 @@ import { SkeletonList } from '../ui/skeleton-list';
 @Component({
   selector: 'app-list-tools',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule, SkeletonList],
+  imports: [FormsModule, TranslatePipe, SkeletonList],
   templateUrl: './list-tools.html',
 })
 export class ListTools {

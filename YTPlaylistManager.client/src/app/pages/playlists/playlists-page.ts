@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy, signal, computed, effect, inject, untracked, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
@@ -16,7 +16,7 @@ import { SkeletonList } from '../../components/ui/skeleton-list';
 @Component({
   selector: 'app-playlists-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, TranslateModule, EmptyState, Modal, SkeletonList],
+  imports: [FormsModule, RouterLink, TranslatePipe, EmptyState, Modal, SkeletonList],
   templateUrl: './playlists-page.html',
 })
 export class PlaylistsPage implements OnInit {
@@ -101,7 +101,7 @@ export class PlaylistsPage implements OnInit {
 
   modifiedAgo(iso: string): string {
     const ms = Date.parse(iso) - Date.now();
-    const rtf = new Intl.RelativeTimeFormat(this.translate.currentLang || 'es', { numeric: 'auto' });
+    const rtf = new Intl.RelativeTimeFormat(this.translate.currentLang() || 'es', { numeric: 'auto' });
     const minutes = Math.round(ms / 60000);
     if (Math.abs(minutes) < 60) return rtf.format(minutes, 'minute');
     const hours = Math.round(minutes / 60);

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, debounceTime, finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
@@ -17,7 +17,7 @@ import { EmptyState } from '../ui/empty-state';
 @Component({
   selector: 'app-song-history',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, FormsModule, TranslateModule, SkeletonList, EmptyState],
+  imports: [DatePipe, FormsModule, TranslatePipe, SkeletonList, EmptyState],
   templateUrl: './song-history.html',
 })
 export class SongHistory {

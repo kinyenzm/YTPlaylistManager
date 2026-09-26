@@ -7,7 +7,7 @@ import {
   OnInit,
 } from '@angular/core';
 import { Router, RouterOutlet, RouterLink } from '@angular/router';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
 import { AuthService } from './services/auth.service';
 import { LangService } from './services/lang.service';
@@ -29,7 +29,7 @@ function mapUrlToLang(url: string, es: boolean): string {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, TranslateModule, LangSwitcher, PendingChanges, CommandPalette],
+  imports: [RouterOutlet, RouterLink, TranslatePipe, LangSwitcher, PendingChanges, CommandPalette],
   templateUrl: './app.html',
 })
 export class App implements OnInit {

@@ -1,11 +1,11 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { LangService } from '../../services/lang.service';
 
 @Component({
   selector: 'app-lang-switcher',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslateModule],
+  imports: [TranslatePipe],
   templateUrl: './lang-switcher.html',
 })
 export class LangSwitcher {

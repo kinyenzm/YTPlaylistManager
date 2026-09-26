@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { delay, finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
@@ -18,7 +18,7 @@ import { EmptyState } from '../ui/empty-state';
 @Component({
   selector: 'app-recover-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule, SkeletonList, EmptyState],
+  imports: [FormsModule, TranslatePipe, SkeletonList, EmptyState],
   templateUrl: './recover-tab.html',
 })
 export class RecoverTab {
