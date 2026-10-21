@@ -36,7 +36,9 @@ yarn-error.log
 .vscode/*.vsix
 .vscode/settings.json
 .idea/
-.claude/
+.claude/*
+!.claude/skills/
+.taste-skill/
 .playwright-mcp/
 *.iml
 .DS_Store
