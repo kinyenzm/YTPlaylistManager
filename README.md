@@ -7,8 +7,8 @@ Herramienta personal full stack (**ASP.NET Core .NET 10** + **Angular 22** — s
 ## Requisitos
 
 - **.NET SDK 10** (el backend apunta a `net10.0`; no hay `global.json`, así que sirve cualquier SDK 10.0.x).
-- **Node.js** `^22.22.3`, `^24.15.0` o `>=26`, y **npm**: es lo que exige Angular CLI 22.2. Con otras versiones `ng` se cierra con error (las impares 23 y 25 solo muestran un aviso).
-- Node.js también hace falta para compilar el backend en local: el `.csproj` referencia `YTPlaylistManager.client.esproj`, así que `dotnet build` / `dotnet run` comprueban `node --version` y ejecutan `npm install` en el cliente si no encuentran `node_modules`.
+- **Node.js** `^22.22.3`, `^24.15.0` o `26.x`, y **npm**: es lo que exige Angular CLI 22.2. `ng` compara la versión mayor, así que con Node 27 o posterior también se cierra con error; las impares 23 y 25 solo muestran un aviso.
+- Node.js también hace falta para compilar el backend en local: el `.csproj` referencia `YTPlaylistManager.client.esproj`, así que `dotnet build` / `dotnet run` comprueban `node --version` y ejecutan `npm install` en el cliente si falta `node_modules` o si `package.json` es más reciente que `package-lock.json`.
 - **Docker** (opcional), solo para el despliegue en contenedor.
 
 ---
@@ -33,7 +33,7 @@ YTPlaylistManager/
 │   │                             #   stores JSON (token, cache de listas/items, pendientes, archivadas, operaciones, cuota)
 │   ├── Filters/                  # RequireGoogleSession (401 sin sesión Google)
 │   ├── Middleware/               # GlobalExceptionMiddleware
-│   ├── Properties/launchSettings.json  # perfiles http (:5080, levanta también Angular vía SpaProxy) y http-api-only (abre Scalar)
+│   ├── Properties/launchSettings.json  # perfiles http (:5080, levanta también Angular vía SpaProxy) y http-api-only (solo la API)
 │   ├── appsettings.test.json     # plantilla de configuración: cópiala a appsettings.json
 │   ├── data/                     # JSON locales (se crea al ejecutar; en .gitignore)
 │   ├── Program.cs
@@ -67,14 +67,14 @@ YTPlaylistManager/
 ├── docs/superpowers/              # specs y planes de diseño (p. ej. organizador unificado)
 ├── .vscode/                       # launch.json + tasks.json (tarea "dev: full stack": backend y frontend en paralelo)
 ├── Agents.md                      # perfiles de agentes IA para trabajar en el proyecto
-├── best-practices.md              # reglas de TypeScript/Angular que sigue el código
+├── best-practices.md              # guía de buenas prácticas de TypeScript/Angular (el código no las cumple todas)
 ├── Dockerfile                     # build client + backend, sirve el SPA desde wwwroot
 ├── .dockerignore / .gitignore
 ├── LICENSE                        # MIT
 └── YTPlaylistManager.slnx         # Solución (formato XML): Server + client (.esproj)
 ```
 
-> **Sin base de datos:** la persistencia es JSON local en `data/` (configurable con `Storage:DataFolder`): token OAuth, cache de listas/items, uniones y reasignaciones pendientes, listas archivadas, cuota estimada y logs. El resto del estado vive en la YouTube Data API. Puedes exportar e importar ese registro como un solo `.json` (*Historial → Respaldo*) y, con el scope de Drive, respaldarlo solo en tu Google Drive (nunca incluye el token). Por eso no hay capa `Data/` (EF Core).
+> **Sin base de datos:** la persistencia es JSON local en `data/` (configurable con `Storage:DataFolder`): token OAuth, cache de listas/items, uniones y reasignaciones pendientes, listas archivadas, cuota estimada y logs. El resto del estado vive en la YouTube Data API. Puedes exportar e importar ese registro como un solo `.json` (*Historial → Respaldo*). Con el scope de Drive, además se respalda solo en tu Google Drive cada vez que el registro cambia, y puedes subirlo o restaurarlo a mano. El respaldo nunca incluye el token, `quota.json` ni `backup-state.json`. Por eso no hay capa `Data/` (EF Core).
 
 ---
 
@@ -149,7 +149,7 @@ dotnet run --launch-profile http
 
 El perfil `http` levanta la API en `http://localhost:5080` y, con **SpaProxy**, también arranca Angular (`npm start` en `YTPlaylistManager.client`). Con este único comando ya tienes la app completa en `http://localhost:4200` (`http://localhost:5080` redirige ahí en cuanto Angular está listo).
 
-Si prefieres arrancar el frontend en otra terminal (sección 4), usa `dotnet run --launch-profile http-api-only`: solo levanta la API y abre la UI **Scalar**.
+Si prefieres arrancar el frontend en otra terminal (sección 4), usa `dotnet run --launch-profile http-api-only`: solo levanta la API. `dotnet run` no abre el navegador (la opción `launchBrowser` del perfil solo la usan Visual Studio y `dotnet watch`), así que abre tú la UI **Scalar** en `http://localhost:5080/scalar/v1`.
 
 En Development tienes **Scalar** en `http://localhost:5080/scalar/v1` y el documento OpenAPI nativo de .NET 10 en `http://localhost:5080/openapi/v1.json`. Fuera de Development no se publican.
 
@@ -181,24 +181,24 @@ Luego abre `http://localhost:4200` en el navegador (`npm start` no lo abre solo)
 3. **Unir listas** (en *Mis listas*), modelo **local-first**:
    - Haz clic en 2+ listas (toda la tarjeta responde al clic, y con teclado se seleccionan con el botón de su esquina; las archivadas o en cola no se pueden elegir). En *Juntar todo en:* eliges la lista destino (por defecto la más grande, porque necesita menos cambios) → **Revisar y unir** → vista previa con las canciones que se agregan y de qué lista vienen → **Aplicar unión (N)**. Si ya están todas en la destino, el botón es **Unir igual (borrar las repetidas)** y las listas origen quedan en cola para borrarse.
    - La unión se aplica **en local** (0 cuota) y queda **pendiente de subir**; aparece la burbuja flotante de cambios pendientes. Las listas origen quedan marcadas como *en cola*.
-   - **Subir a YouTube** (desde el panel de cambios pendientes, con confirmación): inserta las canciones en la lista destino y **borra las listas origen** de tu cuenta. Es **parcial y reanudable**: si se agota la cuota diaria, continúa al día siguiente desde donde quedó. Mientras sube, el panel muestra una barra de progreso; al terminar, un resumen con las canciones subidas, las listas borradas y, si se cortó, cuántas faltan.
+   - **Subir a YouTube** (desde el panel de cambios pendientes, con confirmación): inserta las canciones en la lista destino y **borra las listas origen** de tu cuenta. Es **parcial y reanudable**: si se agota la cuota diaria, la subida se pausa; cuando se renueve la cuota, toca *Subir* otra vez y sigue desde donde quedó (no vuelve a subir lo ya subido). Mientras sube, el panel muestra una barra de progreso indeterminada (*Subiendo a YouTube…*); al terminar, un resumen con las canciones subidas, las listas borradas y, si se cortó, cuántas faltan.
    - **Listas especiales de YouTube** (Favoritos `FL`, Ver más tarde `WL`, Me gusta `LL`, Mezcla `RD`): la API no permite escribirlas. Como origen, se omite su borrado al subir, para que la unión no quede bloqueada para siempre. Como destino no se aceptan (ni al unir ni al recuperar), y un pendiente que ya apunte a una de ellas aparece **bloqueado** en el panel, sin botón de subir: solo puedes descartarlo.
    - **Descartar** revierte la unión local sin tocar YouTube.
 4. **Organizar canciones** (menú *Organizar*, ruta `/organizar`), también **local-first**. Cuatro modos:
    - **Repetidas**: las canciones (mismo video) que están en 2+ listas, primero las que están en más listas. *Buscar* usa la cache (solo lee de YouTube las listas que aún no están cargadas); *Volver a revisar* relee todas tus listas desde YouTube (gasta cuota).
    - **Por lista**: eliges una lista (o entras desde el título de una tarjeta en *Mis listas*, ruta `/organizar/lista/:id`) y ves todas sus canciones: primero las que tienen copias dentro de la misma lista (*×N en esta lista*), luego las que están en más listas. En cada canción, la ✕ de una lista en *Aparece en:* la marca para quitar (↺ la restaura) y *Asignar a listas* abre el selector. Arriba tienes las herramientas de la lista: *Buscar repetidas*, *Eliminar repetidas* y *Ordenar con IA*.
-   - **Por canción**: escribes un nombre o un ID de video (busca mientras escribes) y eliges dónde buscar: *Todas*, *Activas* o *Archivadas* (listas que ya quitaste de YouTube). Al tocar una tarjeta se abre el selector de listas.
+   - **Por canción**: escribes un nombre o un ID de video (busca mientras escribes) y eliges dónde buscar: *Todas*, *Activas* o *Archivadas* (listas que ya quitaste de YouTube). *Archivadas* solo encuentra las listas archivadas que siguen en la cache: las que la app borró de YouTube al subir una unión pierden sus canciones en la cache. Al tocar una tarjeta se abre el selector de listas.
    - **Recuperar**: canciones que la app conoce (listas borradas, historial) pero que hoy no están en ninguna de tus listas. Puedes filtrarlas por la lista donde se vieron por última vez, seleccionarlas y encolarlas hacia una lista existente o una **lista nueva** (se crea privada en YouTube al encolar, 50 unidades). Cada una indica si *No existe en tus playlists actuales* o si *Existe con otro video*, en cuyo caso recuperarla duplicaría la música.
-   - En *Repetidas* y *Por lista*, *Asignar a listas* (en *Por canción*, tocar la tarjeta) abre un selector con **todas tus listas** (marcadas donde está ahora) y eliges dónde debe quedar: **en varias o en una sola**. Se agrega a las nuevas y se quita de las desmarcadas. *Aplicar (queda pendiente)* solo guarda un **borrador local**: la barra inferior muestra *N canción(es) con cambios sin guardar* con **Guardar cambios** (los manda a la cola de pendientes) o **Descartar**, y cada tarjeta tiene *Deshacer*. Si sales de *Organizar* con borradores, la app te ofrece guardarlos antes de salir; al cerrar la pestaña, el navegador te avisa. Los videos privados o eliminados no se pueden reasignar.
+   - En *Repetidas* y *Por lista*, *Asignar a listas* (en *Por canción*, tocar la tarjeta) abre un selector con **todas tus listas** (marcadas donde está ahora) y eliges dónde debe quedar: **en varias o en una sola**. Se agrega a las nuevas y se quita de las desmarcadas. *Aplicar (queda pendiente)* solo guarda un **borrador local**: la barra inferior muestra *N canción(es) con cambios sin guardar* con **Guardar cambios** (los manda a la cola de pendientes) o **Descartar**, y cada tarjeta tiene *Deshacer*. Si sales de *Organizar* con borradores, la app pregunta si quieres guardarlos: *Aceptar* los manda a la cola y sale; *Cancelar* te deja en la pantalla (para salir sin guardar, descártalos primero). Al cerrar la pestaña, el navegador te avisa. Los videos privados o eliminados no se pueden reasignar.
 5. **Búsqueda rápida — Ctrl+K** (⌘K en Mac): abre el command palette desde cualquier pantalla (también con el botón de búsqueda de la barra superior). Al abrir muestra tus primeras listas. Busca en local sin cuota:
    - **Playlists** por nombre o descripción (filtro client-side instantáneo). Elegir una abre *Organizar → Por lista* con esa lista.
-   - **Canciones** por nombre o videoId parcial (un texto de 8+ caracteres sin espacios se busca como ID), desde 2 caracteres y solo en tus listas activas (búsqueda en cache vía API). Elegir una canción abre el modo **Por canción** ya buscado.
+   - **Canciones** por nombre o videoId parcial (un texto de 8+ caracteres hecho solo de letras sin tilde, números, `-` y `_` se busca como ID, así que "Metallica" también se busca como ID), desde 2 caracteres y solo en tus listas activas (búsqueda en cache vía API). Elegir una canción abre el modo **Por canción** ya buscado.
    - Navegar con ↑↓, confirmar con ↵, cerrar con Esc.
-6. **Cambios pendientes — panel global**: una burbuja en la esquina inferior izquierda (*N sin subir · ~Qu*) agrupa *todas* las subidas pendientes de cualquier pantalla: uniones y recuperaciones (*Uniones de listas*), y reasignaciones y copias repetidas quitadas (*Cambios de canciones*). Muestra el costo estimado en unidades, y puedes subir o descartar de forma individual o en bloque (*Subir todo*, *Descartar todo*), siempre con confirmación. Si la lista destino de una unión o recuperación ya no existe o es una lista automática de YouTube, el cambio queda marcado y solo se puede descartar; en un cambio de canción, las listas que ya no existen se omiten. El log completo de actividad real en YouTube queda en **Historial → Actividad**.
+6. **Cambios pendientes — panel global**: una burbuja en la esquina inferior izquierda (un ícono con el número de cambios; *N sin subir · ~Qu* aparece al pasar el mouse o al enfocarla) agrupa *todas* las subidas pendientes de cualquier pantalla: uniones y recuperaciones (*Uniones de listas*), y reasignaciones y copias repetidas quitadas (*Cambios de canciones*). Muestra el costo estimado en unidades, y puedes subir o descartar de forma individual o en bloque (*Subir todo*, *Descartar todo*), siempre con confirmación. Si la lista destino de una unión o recuperación ya no existe o es una lista automática de YouTube, el cambio queda marcado y solo se puede descartar; en un cambio de canción, las listas que ya no existen se omiten. El log completo de actividad real en YouTube queda en **Historial → Actividad**.
 7. **Ordenar con IA** (en *Organizar → Por lista*): eliges *Ordenar por género / ánimo / década* y tocas **Ordenar con IA**. Las canciones se muestran agrupadas por categoría (se piden como máximo 10) dentro de la app; no cambia el orden de la lista en YouTube. Sin API key de NVIDIA, o si ningún modelo responde, verás *Revisa la configuración de IA*.
-8. **Idioma**: selector **ES | EN** arriba. La primera vez usa inglés si tu navegador está en inglés y español en cualquier otro caso; después recuerda tu elección. Fechas y cifras siguen el idioma elegido. Las rutas existen en ambos idiomas (`/organizar` ↔ `/organize`, `/organizar/lista/:id` ↔ `/organize/list/:id`, `/datos` ↔ `/data`), y al cambiar de idioma la URL actual se traduce sola.
-9. **Historial** (menú *Historial*, ruta `/datos`): registro local que guarda el servidor en su carpeta `data/` (no el navegador, así que borrar los datos del navegador no lo afecta). Pestañas: *Resumen* (totales de listas, canciones, uniones y archivadas), *Listas que quité de YouTube* (y a qué lista fueron sus canciones), *Uniones*, *Actividad* (lo que se hizo de verdad en YouTube), *Historial por canción* (por qué listas pasó una canción, desde la cache, 0 cuota) y *Respaldo*. Puedes cambiar de pestaña con ←/→, Inicio y Fin.
-10. **Respaldo** (*Historial → Respaldo*, o *Exportar* arriba): *Descargar respaldo* baja un `.json` con el historial, las listas archivadas, las canciones recuperables y los pendientes (nunca tus credenciales de Google). *Restaurar desde archivo…* reemplaza el registro actual y antes guarda una copia en `data/backups/`. Con **Google Drive** se guarda un solo archivo en la carpeta oculta de la app en tu Drive, que se sube solo cuando el registro cambia; también puedes *Respaldar en Drive ahora* o *Restaurar desde Drive*. Para activarlo, agrega `https://www.googleapis.com/auth/drive.appdata` a `Google:Scopes`, habilita la **Google Drive API** en tu proyecto y usa *Reconectar con Google*.
+8. **Idioma**: selector **ES | EN** arriba. La primera vez usa inglés si tu navegador está en inglés y español en cualquier otro caso; después recuerda tu elección. Las fechas, la cuota de la barra superior y las cifras de *Historial* siguen el idioma elegido; el resto de los números se muestra sin formato. Las rutas existen en ambos idiomas (`/organizar` ↔ `/organize`, `/organizar/lista/:id` ↔ `/organize/list/:id`, `/datos` ↔ `/data`), y al cambiar de idioma la URL actual se traduce sola.
+9. **Historial** (menú *Historial*, ruta `/datos`): registro local que guarda el servidor en su carpeta `data/` (no el navegador, así que borrar los datos del navegador no lo afecta). Pestañas: *Resumen* (totales de listas, canciones, uniones y archivadas), *Listas que quité de YouTube* (y a qué lista fueron sus canciones), *Uniones* (solo el historial de versiones anteriores; las uniones nuevas aparecen en *Listas que quité de YouTube* y en *Actividad*), *Actividad* (las últimas 1000 acciones hechas de verdad en YouTube; crear una lista nueva desde *Recuperar* no se registra), *Historial por canción* (en qué listas está hoy una canción según la cache, 0 cuota; no guarda su recorrido) y *Respaldo*. Puedes cambiar de pestaña con ←/→, Inicio y Fin.
+10. **Respaldo** (*Historial → Respaldo*, o *Exportar* en la parte superior de *Historial*, que baja el mismo `.json`): *Descargar respaldo* baja un `.json` con el historial, las listas archivadas, las canciones recuperables y los pendientes (nunca tus credenciales de Google). *Restaurar desde archivo…* reemplaza el registro actual y antes guarda una copia en `data/backups/`. Con **Google Drive** se guarda un solo archivo en la carpeta oculta de la app en tu Drive, que se sube solo cuando el registro cambia; también puedes *Respaldar en Drive ahora* o *Restaurar desde Drive*. Para activarlo, agrega `https://www.googleapis.com/auth/drive.appdata` a `Google:Scopes`, habilita la **Google Drive API** en tu proyecto y usa *Reconectar con Google*.
 11. **Cuota y avisos**: con sesión, la barra superior muestra la cuota de YouTube estimada que te queda hoy (`restante/límite`; solo cuenta lo que gasta esta app); se actualiza cada 10 s y se pone roja por debajo de 500 unidades. Si tu sesión de Google expira a mitad de uso, aparece un aviso con *Conectar con Google*. Mientras corre *Actualizar todo*, verás *Actualizando todas las listas…* en cualquier pantalla.
 
 Casi todo funciona **offline** desde la cache (0 cuota). Usan la API de YouTube: *Actualizar todo* (pide confirmación y sigue corriendo aunque cambies de pantalla), *Subir a YouTube*, *Buscar repetidas*, *Volver a revisar* en *Repetidas*, crear una *Lista nueva* en *Recuperar*, conectar con Google y la primera carga de listas o canciones que aún no están en la cache. *Por lista*, la búsqueda y el command palette solo ven las canciones que ya están en la cache: si una lista aparece vacía, usa *Actualizar todo*.
@@ -221,8 +221,8 @@ Casi todo funciona **offline** desde la cache (0 cuota). Usan la API de YouTube:
 | POST   | `/api/playlists/merge` | Une en local → deja pendiente de subir |
 | POST   | `/api/playlists/merge/preview` | Vista previa de la unión (0 cuota) |
 | GET    | `/api/playlists/pending-uploads` | Uniones y recuperaciones pendientes de subir |
-| POST   | `/api/playlists/pending-uploads/{id}/upload` | Sube a YouTube (+ borra listas origen si no son especiales; `?limit=N` sube como máximo N canciones) |
-| DELETE | `/api/playlists/pending-uploads/{id}` | Descarta y revierte la unión local |
+| POST   | `/api/playlists/pending-uploads/{id}/upload` | Sube a YouTube. Borra las listas origen (si no son especiales) solo cuando todas las canciones subieron sin fallos; `?limit=N` sube como máximo N canciones en esa llamada |
+| DELETE | `/api/playlists/pending-uploads/{id}` | Descarta una unión (y la revierte en local) o una recuperación. Si la recuperación ya creó una lista nueva, esa lista sigue en YouTube |
 | POST   | `/api/playlists/refresh-all` | Relee todas las listas desde YouTube |
 | POST   | `/api/playlists/{id}/classify` | Ordena con IA |
 | POST   | `/api/songs/search` | Busca canciones por nombre o videoId (en cache) |
@@ -253,23 +253,27 @@ Casi todo funciona **offline** desde la cache (0 cuota). Usan la API de YouTube:
 
 Los errores se manejan de forma central en `GlobalExceptionMiddleware` (y en el filtro `RequireGoogleSession` cuando falta la sesión) y responden `{ message, statusCode }`:
 - `401`: no hay sesión Google, o la sesión expiró o se revocó.
-- `400`: petición inválida.
+- `400`: petición inválida (`ArgumentException` en el servicio).
 - Errores de la API de YouTube: el mismo código que devuelva Google (`403` cuota agotada, `404` lista inexistente, etc.).
 - `503`: IA no disponible u operación cancelada.
 - `502`: fallo de red con un servicio externo.
 - `500`: el resto.
 
-Los errores de Google Drive en `/api/backup/drive/*` no pasan por el middleware y responden `{ code, message }`: `409` falta el permiso de Drive, `503` API de Drive deshabilitada y `502` cualquier otro error de Drive.
+Excepciones a ese formato:
+- Un cuerpo de petición que no se puede leer (JSON mal formado o de otro tipo) lo rechaza ASP.NET antes de llegar al controlador: `400` con *ProblemDetails*.
+- `POST /api/songs/search` (`400`) y `GET /api/cache/song/{videoId}/history` (`400` / `404`) responden solo `{ message }`.
+- `POST /api/backup/import` sin archivo responde `400` `{ code, message }`.
+- En `/api/backup/drive/*`, solo los errores de la API de Google (`GoogleApiException`) responden `{ code, message }`: `409` falta el permiso de Drive, `503` API de Drive deshabilitada y `502` cualquier otro. El resto (por ejemplo, todavía no hay respaldo en Drive o el respaldo no es válido) pasa por el middleware como `400`.
 
 ---
 
 ## Persistencia
 
-Todo vive en `YTPlaylistManager.Server/data/` (configurable con `Storage:DataFolder`; ya ignorado en `.gitignore`). La cache y los pendientes se separan por cuenta dentro de los mismos archivos: no hay subcarpetas por usuario.
+Todo vive en `YTPlaylistManager.Server/data/` (configurable con `Storage:DataFolder`; ya ignorado en `.gitignore`). La cache y los pendientes llevan una clave de usuario (`UserKey`), pero la app es de una sola cuenta: al conectar, todos los datos se reasignan a la cuenta actual, y `playlist-cache.json` guarda una sola cuenta. No hay subcarpetas por usuario.
 
 - `google-token.json` → tokens OAuth (en texto plano; nunca entra en los respaldos).
 - `playlist-cache.json` / `items-cache.json` → cache local de listas y canciones (permite trabajar **offline** sin gastar cuota).
-- `pending-uploads.json` → uniones y recuperaciones aplicadas en local **pendientes de subir** a YouTube (sobreviven reinicios → la subida es reanudable).
+- `pending-uploads.json` → uniones (ya aplicadas en la cache local) y recuperaciones **pendientes de subir** a YouTube (sobreviven reinicios → la subida es reanudable).
 - `pending-song-moves.json` → reasignaciones y remociones de canciones pendientes.
 - `activity-log.json` → hasta 1000 eventos de actividad real en YouTube (insertar/quitar canción, borrar lista). Persiste entre reinicios; visible en **Historial → Actividad**.
 - `archived-playlists.json` → listas origen borradas de YouTube al subir una unión, con la lista en la que se consolidaron.
@@ -293,7 +297,7 @@ docker run -p 8080:8080 -v ytpm-data:/app/data ytplaylistmanager
 
 Dentro del contenedor los datos (token OAuth, cache, pendientes, logs) viven en `/app/data`. Sin el volumen `-v ytpm-data:/app/data` se pierden al borrar el contenedor.
 
-**Configuración en el contenedor:** el `.dockerignore` no excluye `appsettings.json`, así que si existe al hacer `docker build` queda **dentro de la imagen** con tus claves (no la subas a un registro público). También puedes montarlo al arrancar, y tiene prioridad sobre el de la imagen:
+**Configuración en el contenedor:** el `.dockerignore` no excluye `appsettings.json`, así que si existe al hacer `docker build` queda **dentro de la imagen** con tus claves (no la subas a un registro público). También puedes montarlo al arrancar. El archivo montado reemplaza por completo al de la imagen (no se combinan), así que debe traer todas las claves:
 
 ```bash
 docker run -p 8080:8080 \
@@ -317,9 +321,9 @@ La app queda en `http://localhost:8080`. Para que el login funcione en el conten
 
 - **Detección de duplicados** en dos niveles: por `videoId` (exacto) y por **título normalizado**, que quita lo que va entre paréntesis o corchetes, acentos, signos y palabras de ruido como "official", "video", "lyrics", "feat" o "remastered". Así capta "misma canción subida por canales distintos". Los videos privados o eliminados se ignoran. Dentro de una lista, los grupos de título normalizado aparecen primero y los de mismo video después; *Eliminar repetidas* conserva la primera copia (menor posición) de cada grupo. Entre listas (modo *Repetidas*) solo se compara por `videoId`.
 - **Cola de cambios unificada** (`PendingService`): un servicio singleton en el frontend agrupa uniones de listas, recuperaciones y cambios de canciones (reasignaciones y copias repetidas quitadas). El panel flotante global se actualiza tras cada acción y cada 30 s, desde cualquier pantalla.
-- **Local-first**: las operaciones de escritura (unir, quitar, reasignar, recuperar) se aplican en local primero y se sincronizan con YouTube cuando decides subir; en *Organizar*, además, pasan antes por un borrador que confirmas con *Guardar cambios*. La única escritura inmediata es crear una *Lista nueva* desde *Recuperar* (se crea privada en YouTube al encolar, 50 unidades). Fuera de eso, la cuota se gasta al subir y en las lecturas desde YouTube (*Actualizar todo*, *Buscar repetidas*, *Volver a revisar*).
+- **Local-first**: unir, quitar y reasignar se aplican primero en la cache local y se sincronizan con YouTube cuando decides subir; recuperar solo encola (la lista destino no cambia en local hasta que subes y se vuelve a leer). En *Organizar*, además, los cambios pasan antes por un borrador que confirmas con *Guardar cambios*. La única escritura inmediata es crear una *Lista nueva* desde *Recuperar* (se crea privada en YouTube al encolar, 50 unidades). Fuera de eso, la cuota se gasta al subir y en las lecturas desde YouTube (*Actualizar todo*, *Buscar repetidas*, *Volver a revisar*).
 - **Listas especiales de YouTube**: los IDs con prefijo `FL` (Favoritos), `WL` (Ver más tarde), `LL` (Me gusta) y `RD` (Mezcla) no admiten escritura vía API. `PlaylistCatalog.IsSpecialPlaylist()` las detecta: como origen de una unión se omiten del paso de borrado (la entrada no queda bloqueada en la cola), como destino se rechazan al unir o recuperar, y un pendiente que ya apunte a una de ellas se marca `TargetLocked` y solo se puede descartar.
-- **Cuotas API**: YouTube Data API tiene 10.000 unidades/día por defecto (configurable con `YouTube:DailyQuota`). Listar cuesta 1 unidad por página de 50 (listas o canciones); insertar o borrar una canción, borrar una lista o crear una lista cuesta 50. La app lleva su propio contador estimado en `data/quota.json` (solo cuenta lo que gasta esta app) y lo reinicia a medianoche, hora del Pacífico, como YouTube. Si YouTube responde *quotaExceeded*, lo marca como agotado hasta el reinicio.
+- **Cuotas API**: YouTube Data API da 10.000 unidades/día por defecto. `YouTube:DailyQuota` solo cambia el límite del contador propio de la app, no la cuota real. Listar cuesta 1 unidad por página de 50 (listas o canciones); insertar o borrar una canción, borrar una lista o crear una lista cuesta 50. La app lleva su propio contador estimado en `data/quota.json` (solo cuenta lo que gasta esta app) y lo reinicia a medianoche, hora del Pacífico, como YouTube. Si YouTube responde *quotaExceeded*, lo marca como agotado hasta el reinicio.
 - **UserKey estable**: la clave de usuario para la cache es un hash del **ID de tu canal de YouTube** (`AccountId`), que se obtiene al conectar y no cambia entre logins. Si no se puede obtener, se usa el `RefreshToken` como respaldo. Al resolver el canal, los datos guardados con la clave anterior se migran a la nueva, así la cache no se fragmenta.
 - **Command palette** (`Ctrl+K`): búsqueda local sin cuota. Las playlists se filtran client-side y las canciones se buscan en cache vía `POST /api/songs/search`. Elegir una canción navega a `/organizar?q=<videoId>`: el organizador abre el modo "Por canción" con ese ID, busca y quita el parámetro (`replaceUrl`) para que *Atrás* no lo repita. Elegir una playlist navega a `/organizar/lista/:id`.
 - **Skeleton loading**: efecto shimmer CSS (`@keyframes shimmer`) en los estados de carga de listas y canciones.
