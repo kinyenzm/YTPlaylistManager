@@ -1,49 +1,52 @@
+<a class="skip-link" href="#main" (click)="skipToMain($event)">{{ 'a11y.skip' | translate }}</a>
 @if (auth.sessionExpired()) {
   <div class="session-toast" role="alert">
-    <i class="fa-solid fa-triangle-exclamation"></i>
+    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
     <span>{{ 'auth.session_expired_toast' | translate }}</span>
-    <a [href]="loginUrl"><button>{{ 'app.nav.login' | translate }}</button></a>
-    <button class="secondary session-toast__close" (click)="auth.dismissExpired()">
-      <i class="fa-solid fa-xmark"></i>
+    <a class="button button--cta" [href]="loginUrl">{{ 'app.nav.login' | translate }}</a>
+    <button class="secondary session-toast__close" (click)="auth.dismissExpired()" [attr.aria-label]="'a11y.close' | translate">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
     </button>
   </div>
 }
 <header class="app-header">
   <div class="app-header__brand">
-    <h2><a routerLink="/">{{ 'app.title' | translate }}</a></h2>
+    <a class="app-header__name" routerLink="/">{{ 'app.title' | translate }}</a>
     @if (quota(); as q) {
       <span class="app-header__quota"
             [class.app-header__quota--critical]="q.remaining < 500"
-            [title]="'app.nav.quota_title' | translate">
-        {{ q.remaining }}/{{ q.limit }}
+            [title]="'app.nav.quota_title' | translate"
+            role="img"
+            [attr.aria-label]="'a11y.quota' | translate:{ remaining: (q.remaining | number:'1.0-0':lang()), limit: (q.limit | number:'1.0-0':lang()) }">
+        {{ q.remaining | number:'1.0-0':lang() }}/{{ q.limit | number:'1.0-0':lang() }}
       </span>
     }
   </div>
 
   <button class="secondary app-header__search-btn" (click)="triggerPalette()">
-    <i class="fa-solid fa-magnifying-glass app-header__search-icon"></i>
+    <i class="fa-solid fa-magnifying-glass app-header__search-icon" aria-hidden="true"></i>
     <span class="app-header__search-ph">{{ 'app.search_ph' | translate }}</span>
-    <kbd class="app-header__search-kbd">Ctrl K</kbd>
+    <kbd class="app-header__search-kbd">Ctrl&nbsp;K</kbd>
   </button>
 
-  <div class="app-header__nav">
+  <nav class="app-header__nav" [attr.aria-label]="'a11y.main_nav' | translate">
     @if (auth.connected()) {
       <a [routerLink]="navPaths().cross">{{ 'app.nav.cross_dups' | translate }}</a>
       <a [routerLink]="navPaths().cache">{{ 'app.nav.cache' | translate }}</a>
-      <span class="muted">{{ 'app.nav.connected' | translate }}</span>
+      <span class="muted app-header__status">{{ 'app.nav.connected' | translate }}</span>
       <button class="secondary" (click)="logout()">{{ 'app.nav.logout' | translate }}</button>
     } @else {
-      <a [href]="loginUrl"><button>{{ 'app.nav.login' | translate }}</button></a>
+      <a class="button button--cta" [href]="loginUrl">{{ 'app.nav.login' | translate }}</a>
     }
     <app-lang-switcher />
-  </div>
+  </nav>
 </header>
-<main>
+<main id="main" tabindex="-1">
   <router-outlet />
 </main>
 @if (refreshingAll()) {
   <div class="refresh-chip" role="status">
-    <i class="fa-solid fa-arrows-rotate fa-spin"></i>
+    <i class="fa-solid fa-arrows-rotate fa-spin" aria-hidden="true"></i>
     {{ 'app.refreshing_all' | translate }}
   </div>
 }

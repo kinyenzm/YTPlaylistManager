@@ -1,20 +1,20 @@
 <a routerLink="/">{{ 'common.back' | translate }}</a>
-<h3>{{ 'cross.title' | translate }}</h3>
+<h1>{{ 'cross.title' | translate }}</h1>
 <p class="muted">{{ 'cross.intro' | translate }}</p>
 
 @if (!connected()) {
   <app-empty-state>
-    <i class="fa-brands fa-google"></i> {{ 'cross.connect_prompt' | translate }}
+    <i class="fa-brands fa-google" aria-hidden="true"></i> {{ 'cross.connect_prompt' | translate }}
   </app-empty-state>
 } @else {
 
   <div class="row cross-org__mode-bar">
-    <span class="muted cross-org__mode-label">{{ 'cross.view_label' | translate }}</span>
-    <div class="segmented">
-      <button [class.active]="mode() === 'repeated'" (click)="setMode('repeated')">{{ 'cross.mode_repeated' | translate }}</button>
-      <button [class.active]="mode() === 'byList'" (click)="setMode('byList')">{{ 'cross.mode_bylist' | translate }}</button>
-      <button [class.active]="mode() === 'bySong'" (click)="setMode('bySong')">{{ 'cross.mode_bysong' | translate }}</button>
-      <button [class.active]="mode() === 'recover'" (click)="setMode('recover')">{{ 'cross.mode_recover' | translate }}</button>
+    <span class="muted cross-org__mode-label" id="cross-view-label">{{ 'cross.view_label' | translate }}</span>
+    <div class="segmented" role="group" aria-labelledby="cross-view-label">
+      <button type="button" [class.active]="mode() === 'repeated'" [attr.aria-pressed]="mode() === 'repeated'" (click)="setMode('repeated')">{{ 'cross.mode_repeated' | translate }}</button>
+      <button type="button" [class.active]="mode() === 'byList'" [attr.aria-pressed]="mode() === 'byList'" (click)="setMode('byList')">{{ 'cross.mode_bylist' | translate }}</button>
+      <button type="button" [class.active]="mode() === 'bySong'" [attr.aria-pressed]="mode() === 'bySong'" (click)="setMode('bySong')">{{ 'cross.mode_bysong' | translate }}</button>
+      <button type="button" [class.active]="mode() === 'recover'" [attr.aria-pressed]="mode() === 'recover'" (click)="setMode('recover')">{{ 'cross.mode_recover' | translate }}</button>
     </div>
   </div>
 
@@ -34,7 +34,7 @@
     }
 
     @if (report(); as rep) {
-      <p class="muted cross-org__summary">
+      <p class="muted cross-org__summary" role="status">
         {{ 'cross.summary' | translate:{ scanned: rep.scanned, total: rep.totalPlaylists, groups: rep.totalGroups } }}
       </p>
       @if (rep.failed > 0) {
@@ -57,8 +57,8 @@
   <!-- ── Modo: Por lista ── -->
   @if (mode() === 'byList') {
     <div class="row cross-org__list-picker">
-      <label class="muted">{{ 'cross.pick_list' | translate }}</label>
-      <select [ngModel]="listId()" (ngModelChange)="pickList($event)" class="cross-org__select">
+      <label class="muted" for="cross-pick-list">{{ 'cross.pick_list' | translate }}</label>
+      <select id="cross-pick-list" [ngModel]="listId()" (ngModelChange)="pickList($event)" class="cross-org__select">
         <option value="">—</option>
         @for (pl of allPlaylists(); track pl.id) {
           <option [value]="pl.id">{{ optionLabel(pl) }}</option>
@@ -102,11 +102,13 @@
     <div class="row toolbar cross-org__actions-row">
       <input type="text" class="cross-org__filter-name" [ngModel]="nameInput()"
         (ngModelChange)="nameInput.set($event); onFilterChange()" (keyup.enter)="search()"
+        name="song-name" autocomplete="off" [attr.aria-label]="'a11y.filter_name' | translate"
         [placeholder]="'cross.filter_name_ph' | translate" />
       <input type="text" class="cross-org__filter-id" [ngModel]="idInput()"
         (ngModelChange)="idInput.set($event); onFilterChange()" (keyup.enter)="search()"
+        name="video-id" autocomplete="off" spellcheck="false" [attr.aria-label]="'a11y.filter_id' | translate"
         [placeholder]="'cross.filter_id_ph' | translate" />
-      <select [ngModel]="searchScope()" (ngModelChange)="searchScope.set($event); onFilterChange()">
+      <select [ngModel]="searchScope()" (ngModelChange)="searchScope.set($event); onFilterChange()" [attr.aria-label]="'a11y.scope' | translate">
         <option value="all">{{ 'cross.scope_all' | translate }}</option>
         <option value="active">{{ 'cross.scope_active' | translate }}</option>
         <option value="archived">{{ 'cross.scope_archived' | translate }}</option>
@@ -116,7 +118,7 @@
     @if (searching()) {
       <app-skeleton-list [count]="5" />
     } @else if (resultsDeduped().length > 0) {
-      <p class="muted cross-org__summary">{{ 'cross.results_count' | translate:{ n: resultsDeduped().length } }}</p>
+      <p class="muted cross-org__summary" role="status">{{ 'cross.results_count' | translate:{ n: resultsDeduped().length } }}</p>
       @for (r of resultsDeduped(); track r.videoId) {
         <app-song-card
           [videoId]="r.videoId"
@@ -144,7 +146,7 @@
   <!-- ── Barra global de borradores: única vía para mandar cambios a la cola ── -->
   @if (drafts.count() > 0) {
     <div class="cross-org__draft-bar">
-      <span>{{ 'cross.draft_count' | translate:{ n: drafts.count() } }}</span>
+      <span role="status">{{ 'cross.draft_count' | translate:{ n: drafts.count() } }}</span>
       <div class="row row--btn-group">
         <button (click)="saveAll()" [disabled]="drafts.saving()">
           {{ (drafts.saving() ? 'cross.draft_saving' : 'cross.draft_save_all') | translate }}

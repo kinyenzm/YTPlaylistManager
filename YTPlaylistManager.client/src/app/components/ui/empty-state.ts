@@ -5,7 +5,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   selector: 'app-empty-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="card empty-card" [class.danger]="danger()"><ng-content /></div>
+    <div class="card empty-card" [class.danger]="danger()" [attr.role]="danger() ? 'alert' : null"><ng-content /></div>
   `,
 })
 export class EmptyState {

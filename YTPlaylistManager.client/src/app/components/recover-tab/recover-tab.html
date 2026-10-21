@@ -5,7 +5,7 @@
     {{ 'cross.recover_reload' | translate }}
   </button>
   @if (songs().length > 0) {
-    <select [ngModel]="listFilter()" (ngModelChange)="listFilter.set($event)">
+    <select [ngModel]="listFilter()" (ngModelChange)="listFilter.set($event)" [attr.aria-label]="'a11y.source_filter' | translate">
       <option value="">{{ 'cross.recover_filter_all' | translate:{ n: songs().length } }}</option>
       @for (l of sourceLists(); track l.name) {
         <option [value]="l.name">{{ l.name }} ({{ l.n }})</option>
@@ -14,7 +14,7 @@
     <button class="secondary" (click)="toggleAll()">
       {{ (allSelected() ? 'cross.recover_unselect_all' : 'cross.recover_select_all') | translate }}
     </button>
-    <select [ngModel]="targetId()" (ngModelChange)="targetId.set($event)">
+    <select [ngModel]="targetId()" (ngModelChange)="targetId.set($event)" [attr.aria-label]="'a11y.recover_target' | translate">
       <option value="">{{ 'cross.recover_new_list_opt' | translate }}</option>
       @for (pl of playlists(); track pl.id) {
         <option [value]="pl.id">{{ pl.title }}</option>
@@ -22,6 +22,7 @@
     </select>
     @if (!targetId()) {
       <input type="text" class="flex-fill" [ngModel]="newTitle()" (ngModelChange)="newTitle.set($event)"
+        name="new-list-title" autocomplete="off" [attr.aria-label]="'a11y.new_list_name' | translate"
         [placeholder]="'cross.recover_new_list_ph' | translate" />
     }
     <button (click)="stage()" [disabled]="selection().size === 0 || staging()">
@@ -33,7 +34,7 @@
 @if (loading()) {
   <app-skeleton-list [count]="5" />
 } @else if (songs().length > 0) {
-  <p class="muted cross-org__summary">
+  <p class="muted cross-org__summary" role="status">
     {{ 'cross.recover_count' | translate:{ n: filtered().length } }}
     @if (selection().size > 0) {
       <span class="tag tag--staged-added">
@@ -43,19 +44,25 @@
   </p>
   @for (r of filtered(); track r.videoId) {
     <div class="card card--selectable" [class.card--selected]="selection().has(r.videoId)" (click)="toggle(r.videoId)">
+      <button type="button" class="card__toggle" [class.card__toggle--on]="selection().has(r.videoId)"
+              [attr.aria-pressed]="selection().has(r.videoId)"
+              [attr.aria-label]="'a11y.select_song' | translate:{ title: r.title }"
+              (click)="$event.stopPropagation(); toggle(r.videoId)">
+        <i [class]="selection().has(r.videoId) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'" aria-hidden="true"></i>
+      </button>
       <div class="row cross-org__song-row">
-        <img [src]="r.thumbnailUrl || thumb(r.videoId)" class="thumb" alt="" />
+        <img [src]="r.thumbnailUrl || thumb(r.videoId)" class="thumb" alt="" width="84" height="56" loading="lazy" />
         <div class="cross-org__song-body">
           <div>
             <a [href]="'https://www.youtube.com/watch?v=' + r.videoId" target="_blank" rel="noopener"
               (click)="$event.stopPropagation()">{{ r.title }}</a>
           </div>
           @if (r.channelTitle) {
-            <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{ r.channelTitle }}</div>
+            <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon" aria-hidden="true"></i>{{ r.channelTitle }}</div>
           }
           <div class="row row--tags">
             <span class="muted">
-              <i class="fa-solid fa-clock-rotate-left cross-org__meta-icon"></i>{{ 'cross.recover_last_seen' | translate }}
+              <i class="fa-solid fa-clock-rotate-left cross-org__meta-icon" aria-hidden="true"></i>{{ 'cross.recover_last_seen' | translate }}
             </span>
             <span class="tag">{{ r.lastKnownPlaylist }}</span>
             @if (r.existsByTitle) {

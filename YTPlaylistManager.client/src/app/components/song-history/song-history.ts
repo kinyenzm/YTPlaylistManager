@@ -5,6 +5,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, debounceTime, finalize } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ApiErrorService } from '../../services/api-error.service';
+import { LangService } from '../../services/lang.service';
 import { SongMovementLog, SongSearchResult } from '../../models/models';
 import { looksLikeVideoId, thumbUrl } from '../../utils/youtube.utils';
 import { SkeletonList } from '../ui/skeleton-list';
@@ -23,6 +24,8 @@ import { EmptyState } from '../ui/empty-state';
 export class SongHistory {
   private readonly api = inject(ApiService);
   private readonly apiError = inject(ApiErrorService);
+  /** Idioma activo: las fechas salen en el mismo idioma que la interfaz. */
+  protected readonly lang = inject(LangService).current;
 
   protected readonly query = signal('');
   protected readonly results = signal<SongSearchResult[]>([]);

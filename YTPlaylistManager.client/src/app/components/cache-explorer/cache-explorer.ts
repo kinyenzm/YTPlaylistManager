@@ -1,10 +1,11 @@
 import { Component, ChangeDetectionStrategy, signal, inject, input, effect, untracked } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { AuthService } from '../../services/auth.service';
 import { ApiErrorService } from '../../services/api-error.service';
+import { LangService } from '../../services/lang.service';
 import { CacheStatus, PlaylistArchivedInfo, MergeReviewSummary, ActivityItem, BackupStatus } from '../../models/models';
 import { SkeletonList } from '../ui/skeleton-list';
 import { SongHistory } from '../song-history/song-history';
@@ -14,7 +15,7 @@ type Tab = 'dashboard' | 'archived' | 'reviews' | 'activity' | 'history' | 'back
 @Component({
   selector: 'app-cache-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, TranslatePipe, SkeletonList, SongHistory],
+  imports: [DatePipe, DecimalPipe, TranslatePipe, SkeletonList, SongHistory],
   templateUrl: './cache-explorer.html',
 })
 export class CacheExplorer {
@@ -22,6 +23,8 @@ export class CacheExplorer {
   private readonly apiError = inject(ApiErrorService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  /** Idioma activo: fechas y totales salen en el idioma de la interfaz. */
+  protected readonly lang = inject(LangService).current;
   protected readonly connected = this.auth.connected;
   protected readonly driveBackupEnabled = this.auth.driveBackupEnabled;
   // Reconectar forzando el consent: agrega el scope de Drive al grant.
@@ -36,6 +39,7 @@ export class CacheExplorer {
   error = signal<string | null>(null);
 
   activeTab = signal<Tab>('dashboard');
+  private readonly tabOrder: Tab[] = ['dashboard', 'archived', 'reviews', 'activity', 'history', 'backup'];
 
   // ── Respaldo ──
   backupStatus = signal<BackupStatus | null>(null);
@@ -99,6 +103,23 @@ export class CacheExplorer {
         },
         error: (e) => this.error.set(this.apiError.message(e, 'cache.error_load', { msg: (e as Error)?.message })),
       });
+  }
+
+  /** Flechas, Inicio y Fin mueven entre pestañas (patrón ARIA de pestañas). */
+  protected onTabKey(e: KeyboardEvent): void {
+    const i = this.tabOrder.indexOf(this.activeTab());
+    const last = this.tabOrder.length - 1;
+    const next =
+      e.key === 'ArrowRight' ? (i === last ? 0 : i + 1)
+      : e.key === 'ArrowLeft' ? (i === 0 ? last : i - 1)
+      : e.key === 'Home' ? 0
+      : e.key === 'End' ? last
+      : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    const tab = this.tabOrder[next];
+    this.switchTab(tab);
+    setTimeout(() => document.getElementById(`tab-${tab}`)?.focus(), 0);
   }
 
   switchTab(tab: Tab): void {

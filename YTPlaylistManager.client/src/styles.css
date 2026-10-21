@@ -20,6 +20,8 @@
   --shadow-lg: 0 30px 70px -30px rgba(0, 0, 0, 0.9);
   --font-display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
   --font-body: "Hanken Grotesk", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* Tema oscuro también para controles nativos y barras de scroll. */
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -34,6 +36,12 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+/* El header fijo y la barra de borradores no tapan el elemento enfocado. */
+html {
+  scroll-padding-top: 96px;
+  scroll-padding-bottom: 96px;
+  -webkit-tap-highlight-color: rgba(198, 242, 78, 0.18);
 }
 
 /* Atmósfera: glows + grano sutil, fijos detrás de todo */
@@ -64,8 +72,11 @@ h1, h2, h3, h4, h5 {
   letter-spacing: -0.02em;
   line-height: 1.1;
   color: var(--text);
+  text-wrap: balance;
 }
-h3 { font-size: 1.7rem; }
+/* El título de cada pantalla es su h1, con el mismo tamaño que tenía como h3. */
+h1, h3 { font-size: 1.7rem; }
+h1 { margin-block: 1em; }
 h4 { font-size: 1.05rem; letter-spacing: -0.01em; }
 
 a { color: var(--accent2); text-decoration: none; transition: color 0.15s ease; }
@@ -94,15 +105,15 @@ header.app-header {
   align-items: center;
   gap: 12px;
 }
-header.app-header h2 {
+.app-header__name {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 1.35rem;
   letter-spacing: -0.03em;
 }
-header.app-header h2 a { color: var(--text); display: inline-flex; align-items: center; gap: 9px; }
-header.app-header h2 a::before {
+header.app-header .app-header__name { color: var(--text); display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; }
+.app-header__name::before {
   content: "";
   width: 18px; height: 18px;
   flex-shrink: 0;
@@ -113,7 +124,7 @@ header.app-header h2 a::before {
     drop-shadow(0 0 7px rgba(198, 242, 78, 0.75));
   transition: filter 0.18s ease, background 0.18s ease;
 }
-header.app-header h2 a:hover::before {
+.app-header__name:hover::before {
   background: #d4ff66;
   filter:
     drop-shadow(0 0 1px rgba(255, 255, 255, 0.6))
@@ -133,7 +144,7 @@ header.app-header h2 a:hover::before {
 }
 .app-header__quota--critical {
   background: var(--accent);
-  color: #fff;
+  color: #1a0408;
   border-color: transparent;
 }
 .app-header__search-btn {
@@ -168,36 +179,48 @@ header.app-header h2 a:hover::before {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-header.app-header a:not(h2 a) {
+header.app-header .app-header__nav a:not(.button) {
   color: var(--muted);
   font-weight: 600;
   font-size: 0.92rem;
   position: relative;
   padding: 2px 0;
 }
-header.app-header a:not(h2 a)::after {
+header.app-header .app-header__nav a:not(.button)::after {
   content: "";
   position: absolute; left: 0; right: 100%; bottom: -3px; height: 2px;
   background: var(--accent2); border-radius: 2px;
   transition: right 0.22s cubic-bezier(.4,0,.2,1);
 }
-header.app-header a:not(h2 a):hover { color: var(--text); }
-header.app-header a:not(h2 a):hover::after { right: 0; }
+header.app-header .app-header__nav a:not(.button):hover { color: var(--text); }
+header.app-header .app-header__nav a:not(.button):hover::after { right: 0; }
 
-/* Los enlaces que solo envuelven un botón (Conectar con Google) no son ítems de menú:
-   sin subrayado deslizante debajo de la píldora. */
-header.app-header a:not(h2 a):has(> button) { padding: 0; }
-header.app-header a:not(h2 a):has(> button)::after { content: none; }
+/* Enlace con aspecto de botón (Conectar con Google): antes era un <button> dentro de un <a>,
+   que anida dos controles. Ahora es un solo enlace con el mismo aspecto. */
+a.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  background: var(--accent2);
+  color: var(--ink);
+  padding: 9px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.15s ease, color 0.15s ease;
+}
+a.button:hover { color: var(--ink); background: #d4ff66; transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(198, 242, 78, 0.55); }
+a.button:active { transform: translateY(0); }
 
 /* ── CTA de conexión (header y toast de sesión): hover con brillo que barre ── */
-header.app-header a > button,
-.session-toast a > button {
+a.button--cta {
   position: relative;
   overflow: hidden;
 }
 /* El barrido va por ENCIMA del fondo (sin z-index negativo: quedaría tapado). */
-header.app-header a > button::before,
-.session-toast a > button::before {
+a.button--cta::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -206,33 +229,64 @@ header.app-header a > button::before,
   transition: transform 0.5s cubic-bezier(.4, 0, .2, 1);
   pointer-events: none;
 }
-header.app-header a > button:hover::before,
-.session-toast a > button:hover::before {
+a.button--cta:hover::before {
   transform: translateX(130%);
 }
-header.app-header a > button:hover,
-.session-toast a > button:hover {
+a.button--cta:hover {
   transform: translateY(-1px) scale(1.02);
   box-shadow:
     0 0 0 1px rgba(198, 242, 78, 0.4),
     0 6px 20px -6px rgba(198, 242, 78, 0.5);
 }
-header.app-header a > button:active,
-.session-toast a > button:active {
+a.button--cta:active {
   transform: translateY(0) scale(0.98);
   box-shadow: 0 2px 8px -4px rgba(198, 242, 78, 0.4);
 }
-button:focus-visible {
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
   outline: 2px solid var(--accent2);
   outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
-  header.app-header a > button::before,
-  .session-toast a > button::before { transition: none; }
+  a.button--cta::before { transition: none; }
 }
+
+/* ── Accesibilidad: salto al contenido y texto solo para lectores ── */
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -60px;
+  z-index: 2000;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--accent2);
+  color: var(--ink);
+  font-weight: 700;
+}
+.skip-link:focus { top: 12px; color: var(--ink); }
+/* El contenedor principal recibe el foco del salto; no es un control. */
+#main:focus { outline: none; }
+.sr-only,
+.sr-only-focusable:not(:focus):not(:focus-within) {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* Botones, enlaces y etiquetas sin demora de doble toque en táctil. */
+a, button, summary, label, select, [role="button"], [role="tab"] { touch-action: manipulation; }
 
 main {
   padding: clamp(20px, 4vw, 40px);
+  /* Aire al final: el chip flotante de pendientes no tapa la última fila. */
+  padding-bottom: calc(clamp(20px, 4vw, 40px) + 72px);
   max-width: 1180px;
   margin: 0 auto;
   animation: rise 0.4s ease both;
@@ -300,15 +354,24 @@ button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shado
   background: linear-gradient(180deg, rgba(198, 242, 78, 0.13), var(--panel));
 }
 .grid .card--selected:hover { border-color: var(--accent2); }
-/* Checkmark badge en esquina superior derecha de cards seleccionadas */
-.card__check {
+/* Interruptor de selección en la esquina superior derecha: visible al estar seleccionada
+   o al recibir foco con teclado; la tarjeta entera sigue respondiendo al click. */
+.card__toggle {
   position: absolute;
-  top: 10px; right: 12px;
+  top: 6px; right: 8px;
+  padding: 4px 6px;
+  background: none;
+  border: 0;
+  box-shadow: none;
   color: var(--accent2);
   font-size: 1rem;
   line-height: 1;
-  pointer-events: none;
+  opacity: 0;
 }
+.card__toggle--on,
+.card__toggle:focus-visible { opacity: 1; }
+.card__toggle:hover { background: none; box-shadow: none; transform: none; }
+@media (hover: none) { .card__toggle { opacity: 1; } }
 
 /* Segmented control: selector de categoría (≠ botones de acción) */
 .segmented {
@@ -396,7 +459,7 @@ label { font-size: 0.92rem; }
 .progress { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
 .progress > .bar { height: 100%; background: linear-gradient(90deg, var(--accent2), #e2ff86); border-radius: 999px; transition: width 0.3s ease; }
 .progress.indeterminate > .bar { width: 40%; animation: indet 1.1s ease-in-out infinite; }
-@keyframes indet { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+@keyframes indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 
 /* ── Modal ── */
 .modal-backdrop {
@@ -420,7 +483,10 @@ label { font-size: 0.92rem; }
 .modal h3 { color: var(--text); margin-top: 0; }
 
 /* ── Card archivada / en cola ── */
-.card--archived { opacity: 0.5; }
+.card--archived { border-style: dashed; box-shadow: none; }
+.card--archived .card__title a,
+.card--archived .card__title { color: var(--muted); }
+.card--archived .thumb { opacity: 0.5; }
 .archived-tag { background: var(--border); color: var(--muted); }
 .queued-tag {
   display: inline-block;
@@ -467,6 +533,9 @@ th { text-align: left; color: var(--muted); font-weight: 600; font-size: 0.72rem
 td { padding: 10px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
 tr:last-child td { border-bottom: 0; }
 code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em; }
+/* Cifras que se comparan o cambian: dígitos de ancho fijo; en tablas, a la derecha. */
+td, .stat-card .large, .tag, .tag--dup-count, .pending-chip__count, .cmd-palette__item-meta { font-variant-numeric: tabular-nums; }
+th.num, td.num { text-align: right; }
 
 /* Badges editables del organizador: x visible solo en hover; tachado = quitar preparado. */
 .tag--editable { position: relative; padding-right: 6px; white-space: nowrap; }
@@ -474,7 +543,9 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
   background: none; border: none; cursor: pointer; padding: 0 2px; margin: 0;
   font-size: .85em; color: inherit; opacity: 0; transition: opacity .15s;
 }
-.tag--editable:hover .tag__remove-btn { opacity: 1; }
+.tag--editable:hover .tag__remove-btn,
+.tag--editable:focus-within .tag__remove-btn { opacity: 1; }
+@media (hover: none) { .tag--editable .tag__remove-btn { opacity: 1; } }
 .tag--staged-out { text-decoration: line-through; opacity: .55; }
 .tag--staged-out .tag__remove-btn { opacity: 1; }
 .tag--staged-added {
@@ -597,6 +668,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
   outline: none; caret-color: var(--accent2);
 }
 .cmd-palette__input::placeholder { color: var(--muted); }
+.cmd-palette__input-row:focus-within { box-shadow: inset 0 -2px 0 var(--accent2); }
 .cmd-palette__icon--search { color: var(--muted); font-size: 1rem; flex-shrink: 0; }
 .cmd-palette__icon--spin { color: var(--accent2); flex-shrink: 0; }
 .cmd-palette__clear {
@@ -605,7 +677,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
   font-size: 0.85rem; box-shadow: none;
 }
 .cmd-palette__clear:hover { background: var(--border); color: var(--text); transform: none; }
-.cmd-palette__results { max-height: 52vh; overflow-y: auto; }
+.cmd-palette__results { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; }
 .cmd-palette__section {
   padding: 8px 16px 4px;
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
@@ -637,7 +709,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cmd-palette__item-playlists {
   display: block; font-size: 0.72rem; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  opacity: 0.65; margin-top: 1px;
+  margin-top: 1px;
 }
 .cmd-palette__item--skeleton { pointer-events: none; }
 .cmd-palette__item-kind { font-size: 0.88rem; flex-shrink: 0; }
@@ -717,7 +789,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .accent       { color: var(--accent2); }
 
 /* ── Tags ── */
-.tag--danger { background: var(--accent); color: #fff; }
+.tag--danger { background: var(--accent); color: #1a0408; }
 .tag--inline { margin-left: 6px; }
 
 /* ── Cards ── */
@@ -729,9 +801,12 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .card--accent    { border-color: var(--accent2); }
 
 /* ── Modal ── */
-.modal--large  { max-width: 640px; max-height: 82vh; overflow: auto; }
-.modal--wide   { max-width: 700px; width: 94vw; max-height: 86vh; overflow: auto; }
-.modal--tall   { max-width: 540px; max-height: 84vh; overflow: auto; }
+.modal--large  { max-width: 640px; max-height: 82vh; overflow: auto; overscroll-behavior: contain; }
+.modal--wide   { max-width: 700px; width: 94vw; max-height: 86vh; overflow: auto; overscroll-behavior: contain; }
+.modal--tall   { max-width: 540px; max-height: 84vh; overflow: auto; overscroll-behavior: contain; }
+/* Listas largas dentro de modales: el navegador no pinta lo que está fuera de vista. */
+.modal__list .row--item,
+.pending__songs .row--item { content-visibility: auto; contain-intrinsic-size: auto 64px; }
 .modal__title  { margin-top: 0; }
 .page-title    { margin: 0; }
 .modal__list   { margin: 8px 0; }
@@ -768,6 +843,10 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cross-org__summary        { margin-top: 12px; }
 .empty-card { margin-top: 10px; }
 .cross-org__song-list      { margin-top: 12px; }
+/* Listas de 100+ canciones: el navegador no pinta las tarjetas fuera de vista
+   (siguen en el árbol de accesibilidad y se pueden enfocar). */
+.cross-org__song-list > app-song-card > .card,
+.cross-org__song-list > .card { content-visibility: auto; contain-intrinsic-size: auto 104px; }
 .cross-org__song-row       { align-items: flex-start; gap: 8px; }
 .cross-org__song-body      { flex: 1; min-width: 0; }
 .cross-org__dup-group      { margin-top: 10px; }
@@ -777,7 +856,7 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
 .cross-org__section-group  { margin-top: 10px; }
 .cross-org__section-heading { margin: 6px 0; }
 .cross-org__section-list   { margin: 0; padding-left: 18px; }
-.cross-org__list-scroller  { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 6px; }
+.cross-org__list-scroller  { max-height: 300px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 10px; padding: 6px; }
 .cross-org__busy-desc      { margin: 12px 0 0; }
 .cross-org__select         { flex: 1; }
 
@@ -858,5 +937,46 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78em
   .pending-chip__count,
   .cross-org__draft-bar,
   .card--accent,
-  .app-header__quota--critical { animation: none; }
+  .app-header__quota--critical,
+  main,
+  .modal-backdrop,
+  .modal,
+  .tab-content,
+  .skeleton { animation: none; }
+  .progress.indeterminate > .bar { animation: none; width: 100%; opacity: 0.55; }
+  .pending-chip__label,
+  .card,
+  button,
+  a.button { transition: none; }
+  .grid .card:hover,
+  .grid .card--selected,
+  button:hover,
+  a.button:hover { transform: none; }
+}
+
+/* ── Header en tablet y teléfono ──
+   Antes la rejilla de tres columnas no cabía: el nombre se partía en tres líneas,
+   el buscador y los enlaces salían de la pantalla y el header fijo medía 165-245 px. */
+@media (max-width: 1024px) {
+  header.app-header { grid-template-columns: auto auto 1fr; }
+  .app-header__search-btn { min-width: 0; width: auto; justify-self: start; padding: 9px 11px; }
+  .app-header__search-ph { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .app-header__search-kbd { display: none; }
+  .app-header__status { display: none; }
+  .app-header__nav { flex-wrap: nowrap; gap: 14px; }
+}
+@media (max-width: 600px) {
+  header.app-header {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "brand search" "nav nav";
+    row-gap: 10px;
+    padding: 10px 16px;
+  }
+  .app-header__brand { grid-area: brand; min-width: 0; gap: 8px; }
+  .app-header__name { font-size: 1.05rem; }
+  .app-header__search-btn { grid-area: search; }
+  .app-header__nav { grid-area: nav; justify-content: space-between; gap: 10px; }
+  /* Los modos del organizador se deslizan en su propia fila; nunca parten una palabra. */
+  .segmented { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+  .segmented button { white-space: nowrap; flex: none; padding: 7px 10px; font-size: 0.86rem; }
 }

@@ -6,6 +6,7 @@ import {
   inject,
   OnInit,
 } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { Router, RouterOutlet, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ApiService } from './services/api.service';
@@ -29,7 +30,7 @@ function mapUrlToLang(url: string, es: boolean): string {
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, TranslatePipe, LangSwitcher, PendingChanges, CommandPalette],
+  imports: [RouterOutlet, RouterLink, DecimalPipe, TranslatePipe, LangSwitcher, PendingChanges, CommandPalette],
   templateUrl: './app.html',
 })
 export class App implements OnInit {
@@ -77,6 +78,12 @@ export class App implements OnInit {
     });
 
     this.auth.check();
+  }
+
+  // El enlace de salto no puede navegar a "#main": con <base href="/"> iría a la raíz.
+  skipToMain(e: Event): void {
+    e.preventDefault();
+    document.getElementById('main')?.focus();
   }
 
   triggerPalette(): void {

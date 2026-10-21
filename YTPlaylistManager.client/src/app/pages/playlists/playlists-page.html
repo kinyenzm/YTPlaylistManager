@@ -1,5 +1,5 @@
 <div class="row row--between">
-  <h3 class="page-title">{{ 'playlists.title' | translate }}</h3>
+  <h1 class="page-title">{{ 'playlists.title' | translate }}</h1>
   @if (authenticated()) {
     <button class="secondary" (click)="openRefreshConfirm()" [disabled]="loading() || refreshing()">
       @if (refreshing()) {
@@ -34,8 +34,8 @@
     <strong>{{ 'playlists.selection_title' | translate:{ count: selectedIds().size } }}</strong>
 
     <div class="row cross-org__actions-row">
-      <label class="muted">{{ 'playlists.merge_into' | translate }}</label>
-      <select [ngModel]="targetId()" (ngModelChange)="targetOverride.set($event)">
+      <label class="muted" for="merge-target">{{ 'playlists.merge_into' | translate }}</label>
+      <select id="merge-target" [ngModel]="targetId()" (ngModelChange)="targetOverride.set($event)">
         @for (p of selectedPlaylists(); track p.id) {
           <option [value]="p.id">{{ 'playlists.merge_option' | translate:{ title: p.title, count: p.itemCount } }}</option>
         }
@@ -59,12 +59,18 @@
          [class.card--selectable]="!p.isArchived && !p.queuedForMerge"
          [class.card--selected]="selectedIds().has(p.id)"
          (click)="toggleCard(p)">
-      @if (selectedIds().has(p.id)) {
-        <span class="card__check"><i class="fa-solid fa-circle-check"></i></span>
+      @if (!p.isArchived && !p.queuedForMerge) {
+        <!-- La tarjeta entera responde al click; este botón da el mismo gesto a teclado y lector. -->
+        <button type="button" class="card__toggle" [class.card__toggle--on]="selectedIds().has(p.id)"
+                [attr.aria-pressed]="selectedIds().has(p.id)"
+                [attr.aria-label]="'a11y.select_list' | translate:{ title: p.title }"
+                (click)="$event.stopPropagation(); toggleCard(p)">
+          <i [class]="selectedIds().has(p.id) ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'" aria-hidden="true"></i>
+        </button>
       }
       <div class="row">
         @if (p.thumbnailUrl) {
-          <img [src]="p.thumbnailUrl" class="thumb" alt="" />
+          <img [src]="p.thumbnailUrl" class="thumb" alt="" width="84" height="56" loading="lazy" />
         }
       </div>
       <h4 class="card__title">
@@ -92,7 +98,7 @@
       </div>
       @if (p.lastModifiedUtc) {
         <div class="muted card__date">
-          <i class="fa-regular fa-clock"></i> {{ 'playlists.modified' | translate:{ ago: modifiedAgo(p.lastModifiedUtc) } }}
+          <i class="fa-regular fa-clock" aria-hidden="true"></i> {{ 'playlists.modified' | translate:{ ago: modifiedAgo(p.lastModifiedUtc) } }}
         </div>
       }
       @if (p.description) {
@@ -105,7 +111,7 @@
 
 @if (refreshConfirmOpen()) {
   <app-modal (dismiss)="cancelRefresh()">
-      <h3 class="modal__title">⚠ {{ 'playlists.refresh_all_confirm_title' | translate }}</h3>
+      <h3 class="modal__title"><span aria-hidden="true">⚠</span> {{ 'playlists.refresh_all_confirm_title' | translate }}</h3>
       <p>{{ 'playlists.refresh_all_confirm_body' | translate:{ playlists: refreshEstimate().playlists, quota: refreshEstimate().quota } }}</p>
       <div class="row row--modal-actions">
         <button class="secondary" (click)="cancelRefresh()">{{ 'common.cancel' | translate }}</button>
@@ -116,12 +122,12 @@
 
 @if (refreshResult(); as r) {
   <app-modal (dismiss)="dismissRefreshResult()">
-      <h3 class="modal__title">✓ {{ 'playlists.refresh_all_done' | translate:{ playlists: r.playlistsRefreshed, items: r.itemsRefreshed, quota: r.quotaUsed } }}</h3>
+      <h3 class="modal__title"><span aria-hidden="true">✓</span> {{ 'playlists.refresh_all_done' | translate:{ playlists: r.playlistsRefreshed, items: r.itemsRefreshed, quota: r.quotaUsed } }}</h3>
       @if (r.playlistsSkipped > 0) {
         <p class="muted">{{ 'playlists.refresh_all_partial' | translate:{ skipped: r.playlistsSkipped } }}</p>
       }
       <div class="row row--modal-actions">
-        <button (click)="dismissRefreshResult()">OK</button>
+        <button (click)="dismissRefreshResult()">{{ 'common.close' | translate }}</button>
       </div>
   </app-modal>
 }
@@ -132,7 +138,7 @@
       <p class="muted">{{ 'playlists.preview_summary' | translate:{ add: pv.toAddCount, present: pv.alreadyPresentCount } }}</p>
 
       @for (w of pv.warnings; track w) {
-        <div class="card danger card--warning">⚠ {{ w }}</div>
+        <div class="card danger card--warning" role="alert"><span aria-hidden="true">⚠</span> {{ w }}</div>
       }
 
       @if (pv.toAddCount === 0) {
@@ -142,7 +148,7 @@
           @for (s of pv.toAdd; track s.videoId) {
             <div class="row row--item">
               @if (s.thumbnailUrl) {
-                <img [src]="s.thumbnailUrl" class="thumb" alt="" />
+                <img [src]="s.thumbnailUrl" class="thumb" alt="" width="84" height="56" loading="lazy" />
               }
               <div>
                 <div>{{ s.title }}</div>

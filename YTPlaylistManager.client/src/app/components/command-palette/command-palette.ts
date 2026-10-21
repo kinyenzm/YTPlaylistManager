@@ -43,13 +43,16 @@ export class CommandPalette implements OnDestroy {
   protected readonly loading = signal(false);
   protected readonly activeIndex = signal(0);
 
-  private allPlaylists: Playlist[] = [];
+  // Signal (no arreglo común): el computed de abajo debe enterarse cuando llegan las listas.
+  private readonly allPlaylists = signal<Playlist[]>([]);
+  /** Dónde estaba el foco al abrir; al cerrar vuelve ahí. */
+  private returnFocus: HTMLElement | null = null;
   private readonly query$ = new Subject<string>();
   private readonly keyListener: (e: KeyboardEvent) => void;
 
   protected readonly filteredPlaylists = computed(() => {
     const q = this.rawQuery().toLowerCase().trim();
-    const list = this.allPlaylists.filter(p => !p.isArchived);
+    const list = this.allPlaylists().filter(p => !p.isArchived);
     if (!q) return list.slice(0, 5);
     return list
       .filter(p =>
@@ -88,14 +91,18 @@ export class CommandPalette implements OnDestroy {
         return;
       }
       if (!this.open()) return;
-      if (e.key === 'Escape') { this.close(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); this.close(); return; }
+      // El diálogo es modal: Tab no sale al fondo, el foco se queda en el buscador.
+      if (e.key === 'Tab') { e.preventDefault(); this.focusInput(); return; }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         this.activeIndex.update(i => Math.min(i + 1, this.allItems().length - 1));
+        this.revealActive();
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         this.activeIndex.update(i => Math.max(i - 1, 0));
+        this.revealActive();
       }
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -133,6 +140,7 @@ export class CommandPalette implements OnDestroy {
   }
 
   private openPalette(): void {
+    this.returnFocus = document.activeElement as HTMLElement | null;
     this.open.set(true);
     this.rawQuery.set('');
     this.songs.set([]);
@@ -141,18 +149,29 @@ export class CommandPalette implements OnDestroy {
     // Sin sesión no se cargan listas (el palette abre pero queda vacío).
     if (this.auth.connected()) {
       this.api.listPlaylists(false, false).subscribe(ps => {
-        this.allPlaylists = ps;
+        this.allPlaylists.set(ps);
       });
     } else {
-      this.allPlaylists = [];
+      this.allPlaylists.set([]);
     }
-    setTimeout(() => (document.getElementById('cp-input') as HTMLInputElement | null)?.focus(), 40);
+    setTimeout(() => this.focusInput(), 40);
   }
 
   close(): void {
     this.open.set(false);
     this.rawQuery.set('');
     this.songs.set([]);
+    const target = this.returnFocus;
+    this.returnFocus = null;
+    if (target?.isConnected) setTimeout(() => target.focus(), 0);
+  }
+
+  private focusInput(): void {
+    (document.getElementById('cp-input') as HTMLInputElement | null)?.focus();
+  }
+
+  private revealActive(): void {
+    setTimeout(() => document.getElementById(`cp-opt-${this.activeIndex()}`)?.scrollIntoView({ block: 'nearest' }), 0);
   }
 
   onQuery(q: string): void {

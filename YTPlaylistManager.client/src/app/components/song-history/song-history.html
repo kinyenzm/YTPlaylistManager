@@ -2,7 +2,8 @@
 
 <div class="row toolbar cross-org__actions-row">
   <input type="text" class="flex-fill" [ngModel]="query()" (ngModelChange)="onQueryChange($event)"
-    (keyup.enter)="search()" [placeholder]="'cache.history_search_ph' | translate" />
+    (keyup.enter)="search()" name="history-query" autocomplete="off" spellcheck="false"
+    [attr.aria-label]="'a11y.history_search' | translate" [placeholder]="'cache.history_search_ph' | translate" />
 </div>
 
 @if (error(); as e) {
@@ -14,12 +15,13 @@
 } @else if (results().length > 0) {
   <div class="cross-org__song-list">
     @for (r of results(); track r.videoId) {
-      <div class="card card--selectable" (click)="open(r.videoId)">
+      <div class="card card--selectable" role="button" tabindex="0" (click)="open(r.videoId)"
+           (keydown.enter)="open(r.videoId)" (keydown.space)="$event.preventDefault(); open(r.videoId)">
         <div class="row cross-org__song-row">
-          <img [src]="thumb(r.videoId)" class="thumb" alt="" />
+          <img [src]="thumb(r.videoId)" class="thumb" alt="" width="84" height="56" loading="lazy" />
           <div class="cross-org__song-body">
             <div>{{ r.title }}</div>
-            <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon"></i>{{ r.channelTitle }}</div>
+            <div class="muted"><i class="fa-regular fa-circle-user cross-org__meta-icon" aria-hidden="true"></i>{{ r.channelTitle }}</div>
             <code class="muted">{{ r.videoId }}</code>
           </div>
         </div>
@@ -38,7 +40,7 @@
   <div class="card">
     <div class="row row--between">
       <h4 class="modal__title">{{ 'cache.history_title' | translate }}</h4>
-      <button class="secondary pending__close" (click)="clear()"><i class="fa-solid fa-xmark"></i></button>
+      <button class="secondary pending__close" (click)="clear()" [attr.aria-label]="'a11y.close' | translate"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
     </div>
     <p>
       <strong>{{ 'cache.video_id_label' | translate }}</strong>
@@ -57,7 +59,7 @@
                 {{ evt.playlistTitle }}
                 @if (evt.position >= 0) { <span>#{{ evt.position }}</span> }
               </p>
-              <p class="muted timeline__event">{{ evt.date | date: 'medium' }}</p>
+              <p class="muted timeline__event">{{ evt.date | date: 'medium' : undefined : lang() }}</p>
               @if (evt.reason) {
                 <p class="muted timeline__event"><em>{{ evt.reason }}</em></p>
               }

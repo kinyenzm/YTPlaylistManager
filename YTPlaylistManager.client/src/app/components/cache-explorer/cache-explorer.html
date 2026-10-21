@@ -1,6 +1,6 @@
 <div class="card">
   <div class="row row--between card__header">
-    <h2>{{ 'cache.title' | translate }}</h2>
+    <h1 class="page-title">{{ 'cache.title' | translate }}</h1>
     <div class="row">
       <button (click)="refreshCache()" class="secondary">{{ 'cache.refresh' | translate }}</button>
       <button (click)="downloadBackup()" class="secondary">{{ 'cache.export' | translate }}</button>
@@ -10,89 +10,95 @@
   <p class="muted">{{ 'cache.intro' | translate }}</p>
 
   @if (!connected()) {
-    <p class="muted"><i class="fa-brands fa-google"></i> {{ 'cross.connect_prompt' | translate }}</p>
+    <p class="muted"><i class="fa-brands fa-google" aria-hidden="true"></i> {{ 'cross.connect_prompt' | translate }}</p>
   }
   @if (isLoading()) {
     <app-skeleton-list variant="stat" [count]="4" />
   }
   @if (error()) {
-    <p class="danger">{{ error() }}</p>
+    <p class="danger" role="alert">{{ error() }}</p>
   }
 
-  <div class="tabs">
-    <button
-      (click)="switchTab('dashboard')"
-      [class.active]="activeTab() === 'dashboard'"
-      class="tab-btn"
-    >
+  <div class="tabs" role="tablist" [attr.aria-label]="'a11y.data_sections' | translate" (keydown)="onTabKey($event)">
+    <button type="button" role="tab" class="tab-btn" id="tab-dashboard"
+            [class.active]="activeTab() === 'dashboard'"
+            [attr.aria-selected]="activeTab() === 'dashboard'"
+            aria-controls="panel-dashboard"
+            [attr.tabindex]="activeTab() === 'dashboard' ? 0 : -1"
+            (click)="switchTab('dashboard')">
       {{ 'cache.tab_dashboard' | translate }}
     </button>
-    <button
-      (click)="switchTab('archived')"
-      [class.active]="activeTab() === 'archived'"
-      class="tab-btn"
-    >
+    <button type="button" role="tab" class="tab-btn" id="tab-archived"
+            [class.active]="activeTab() === 'archived'"
+            [attr.aria-selected]="activeTab() === 'archived'"
+            aria-controls="panel-archived"
+            [attr.tabindex]="activeTab() === 'archived' ? 0 : -1"
+            (click)="switchTab('archived')">
       {{ 'cache.tab_archived' | translate:{ count: archivedPlaylists().length } }}
     </button>
-    <button
-      (click)="switchTab('reviews')"
-      [class.active]="activeTab() === 'reviews'"
-      class="tab-btn"
-    >
+    <button type="button" role="tab" class="tab-btn" id="tab-reviews"
+            [class.active]="activeTab() === 'reviews'"
+            [attr.aria-selected]="activeTab() === 'reviews'"
+            aria-controls="panel-reviews"
+            [attr.tabindex]="activeTab() === 'reviews' ? 0 : -1"
+            (click)="switchTab('reviews')">
       {{ 'cache.tab_reviews' | translate:{ count: mergeReviews().length } }}
     </button>
-    <button
-      (click)="switchTab('activity')"
-      [class.active]="activeTab() === 'activity'"
-      class="tab-btn"
-    >
+    <button type="button" role="tab" class="tab-btn" id="tab-activity"
+            [class.active]="activeTab() === 'activity'"
+            [attr.aria-selected]="activeTab() === 'activity'"
+            aria-controls="panel-activity"
+            [attr.tabindex]="activeTab() === 'activity' ? 0 : -1"
+            (click)="switchTab('activity')">
       {{ 'cache.tab_activity' | translate:{ count: activityLog().length } }}
     </button>
-    <button
-      (click)="switchTab('history')"
-      [class.active]="activeTab() === 'history'"
-      class="tab-btn"
-    >
+    <button type="button" role="tab" class="tab-btn" id="tab-history"
+            [class.active]="activeTab() === 'history'"
+            [attr.aria-selected]="activeTab() === 'history'"
+            aria-controls="panel-history"
+            [attr.tabindex]="activeTab() === 'history' ? 0 : -1"
+            (click)="switchTab('history')">
       {{ 'cache.tab_history' | translate }}
     </button>
-    <button
-      (click)="switchTab('backup')"
-      [class.active]="activeTab() === 'backup'"
-      class="tab-btn"
-    >
+    <button type="button" role="tab" class="tab-btn" id="tab-backup"
+            [class.active]="activeTab() === 'backup'"
+            [attr.aria-selected]="activeTab() === 'backup'"
+            aria-controls="panel-backup"
+            [attr.tabindex]="activeTab() === 'backup' ? 0 : -1"
+            (click)="switchTab('backup')">
       {{ 'cache.tab_backup' | translate }}
     </button>
   </div>
 
   @if (activeTab() === 'dashboard' && cacheStatus()) {
-    <div class="tab-content">
-      <div class="grid">
+    <div class="tab-content" role="tabpanel" id="panel-dashboard" aria-labelledby="tab-dashboard" tabindex="0">
+      <div class="grid grid--stats">
         <div class="stat-card">
-          <div>🎵</div>
+          <div aria-hidden="true">🎵</div>
           <div>
             <p class="muted">{{ 'cache.stat_total_playlists' | translate }}</p>
-            <p class="large">{{ cacheStatus()!.playlistsCount }}</p>
+            <p class="large">{{ cacheStatus()!.playlistsCount | number:'1.0-0':lang() }}</p>
           </div>
         </div>
         <div class="stat-card">
-          <div>🎶</div>
+          <div aria-hidden="true">🎶</div>
           <div>
             <p class="muted">{{ 'cache.stat_total_songs' | translate }}</p>
-            <p class="large">{{ cacheStatus()!.totalSongs }}</p>
+            <p class="large">{{ cacheStatus()!.totalSongs | number:'1.0-0':lang() }}</p>
           </div>
         </div>
         <div class="stat-card">
-          <div>🔀</div>
+          <div aria-hidden="true">🔀</div>
           <div>
             <p class="muted">{{ 'cache.stat_merges' | translate }}</p>
-            <p class="large">{{ cacheStatus()!.mergesCount }}</p>
+            <p class="large">{{ cacheStatus()!.mergesCount | number:'1.0-0':lang() }}</p>
           </div>
         </div>
         <div class="stat-card">
-          <div>📦</div>
+          <div aria-hidden="true">📦</div>
           <div>
             <p class="muted">{{ 'cache.stat_archived' | translate }}</p>
-            <p class="large">{{ cacheStatus()!.archivedPlaylistsCount }}</p>
+            <p class="large">{{ cacheStatus()!.archivedPlaylistsCount | number:'1.0-0':lang() }}</p>
           </div>
         </div>
       </div>
@@ -100,14 +106,14 @@
   }
 
   @if (activeTab() === 'archived') {
-    <div class="tab-content">
+    <div class="tab-content" role="tabpanel" id="panel-archived" aria-labelledby="tab-archived" tabindex="0">
       @if (archivedPlaylists().length > 0) {
         <table>
           <thead>
             <tr>
               <th>{{ 'cache.archived_col_original' | translate }}</th>
               <th>{{ 'cache.archived_col_into' | translate }}</th>
-              <th>{{ 'cache.archived_col_songs' | translate }}</th>
+              <th class="num">{{ 'cache.archived_col_songs' | translate }}</th>
               <th>{{ 'cache.archived_col_when' | translate }}</th>
             </tr>
           </thead>
@@ -120,8 +126,8 @@
                   <code class="muted">{{ p.id }}</code>
                 </td>
                 <td>{{ p.mergedIntoPlaylistTitle }}</td>
-                <td>{{ p.songsCount }}</td>
-                <td class="muted">{{ p.archivedAt | date: 'short' }}</td>
+                <td class="num">{{ p.songsCount | number:'1.0-0':lang() }}</td>
+                <td class="muted">{{ p.archivedAt | date: 'short' : undefined : lang() }}</td>
               </tr>
             }
           </tbody>
@@ -133,15 +139,15 @@
   }
 
   @if (activeTab() === 'reviews') {
-    <div class="tab-content">
+    <div class="tab-content" role="tabpanel" id="panel-reviews" aria-labelledby="tab-reviews" tabindex="0">
       @if (mergeReviews().length > 0) {
         <table>
           <thead>
             <tr>
               <th>{{ 'cache.review_col_target' | translate }}</th>
               <th>{{ 'cache.review_col_sources' | translate }}</th>
-              <th>{{ 'cache.review_col_new' | translate }}</th>
-              <th>{{ 'cache.review_col_dup' | translate }}</th>
+              <th class="num">{{ 'cache.review_col_new' | translate }}</th>
+              <th class="num">{{ 'cache.review_col_dup' | translate }}</th>
               <th>{{ 'cache.review_col_when' | translate }}</th>
             </tr>
           </thead>
@@ -158,12 +164,12 @@
                     <div>{{ s.title }} <span class="muted">({{ s.itemCount }})</span></div>
                   }
                   @if (r.deleteSources) {
-                    <div class="muted" style="margin-top:4px">📦 {{ 'cache.review_archived_badge' | translate }}</div>
+                    <div class="muted" style="margin-top:4px"><span aria-hidden="true">📦</span> {{ 'cache.review_archived_badge' | translate }}</div>
                   }
                 </td>
-                <td>{{ r.newSongsCount }}</td>
-                <td>{{ r.duplicateSongsCount }}</td>
-                <td class="muted">{{ r.createdAtUtc | date: 'short' }}</td>
+                <td class="num">{{ r.newSongsCount | number:'1.0-0':lang() }}</td>
+                <td class="num">{{ r.duplicateSongsCount | number:'1.0-0':lang() }}</td>
+                <td class="muted">{{ r.createdAtUtc | date: 'short' : undefined : lang() }}</td>
               </tr>
             }
           </tbody>
@@ -175,19 +181,19 @@
   }
 
   @if (activeTab() === 'activity') {
-    <div class="tab-content">
+    <div class="tab-content" role="tabpanel" id="panel-activity" aria-labelledby="tab-activity" tabindex="0">
       @if (activityLog().length > 0) {
         @for (a of activityLog(); track $index) {
           <div class="row" style="justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft)">
             <div class="muted" style="font-size:0.92em;min-width:0">
               @switch (a.type) {
-                @case ('insert') { <i class="fa-solid fa-plus"></i> {{ 'activity.added' | translate:{ title: a.title, playlist: a.playlist } }} }
-                @case ('delete') { <i class="fa-solid fa-minus"></i> {{ 'activity.removed' | translate:{ title: a.title, playlist: a.playlist } }} }
-                @case ('delete-list') { <i class="fa-solid fa-trash"></i> {{ 'activity.deleted_list' | translate:{ title: a.title } }} }
+                @case ('insert') { <i class="fa-solid fa-plus" aria-hidden="true"></i> {{ 'activity.added' | translate:{ title: a.title, playlist: a.playlist } }} }
+                @case ('delete') { <i class="fa-solid fa-minus" aria-hidden="true"></i> {{ 'activity.removed' | translate:{ title: a.title, playlist: a.playlist } }} }
+                @case ('delete-list') { <i class="fa-solid fa-trash" aria-hidden="true"></i> {{ 'activity.deleted_list' | translate:{ title: a.title } }} }
                 @default { {{ a.type }} · {{ a.title }} }
               }
             </div>
-            <span class="muted" style="flex-shrink:0;font-size:0.8em">{{ a.at | date: 'short' }}</span>
+            <span class="muted" style="flex-shrink:0;font-size:0.8em">{{ a.at | date: 'short' : undefined : lang() }}</span>
           </div>
         }
       } @else {
@@ -197,20 +203,20 @@
   }
 
   @if (activeTab() === 'history') {
-    <div class="tab-content">
+    <div class="tab-content" role="tabpanel" id="panel-history" aria-labelledby="tab-history" tabindex="0">
       <app-song-history />
     </div>
   }
 
   @if (activeTab() === 'backup') {
-    <div class="tab-content">
+    <div class="tab-content" role="tabpanel" id="panel-backup" aria-labelledby="tab-backup" tabindex="0">
       <p class="muted">{{ 'cache.backup_intro' | translate }}</p>
 
       @if (backupMsg(); as m) {
-        <div class="card card--accent pending__note">{{ m }}</div>
+        <div class="card card--accent pending__note" role="status">{{ m }}</div>
       }
       @if (backupError(); as e) {
-        <div class="card danger pending__note">{{ e }}</div>
+        <div class="card danger pending__note" role="alert">{{ e }}</div>
       }
 
       <div class="card">
@@ -233,7 +239,7 @@
           <p class="muted">
             {{ 'cache.backup_drive_desc' | translate }}
             @if (backupStatus()?.driveFileModifiedUtc; as at) {
-              <br />{{ 'cache.backup_last' | translate }} {{ at | date: 'medium' }}
+              <br />{{ 'cache.backup_last' | translate }} {{ at | date: 'medium' : undefined : lang() }}
             } @else {
               <br />{{ 'cache.backup_never' | translate }}
             }
@@ -248,7 +254,7 @@
           </div>
         } @else {
           <p class="muted">{{ 'cache.backup_scope_missing' | translate }}</p>
-          <a [href]="reconnectUrl"><button>{{ 'cache.backup_reconnect' | translate }}</button></a>
+          <a class="button" [href]="reconnectUrl">{{ 'cache.backup_reconnect' | translate }}</a>
         }
       </div>
     </div>

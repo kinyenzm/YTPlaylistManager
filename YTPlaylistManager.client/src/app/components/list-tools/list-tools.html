@@ -2,7 +2,7 @@
   <strong>{{ 'detail.actions' | translate }}</strong>
   <div class="row toolbar cross-org__actions-row">
     <button (click)="loadDuplicates()" [disabled]="loadingDup()">{{ 'detail.find_dup' | translate }}</button>
-    <select [ngModel]="strategy()" (ngModelChange)="strategy.set($event)">
+    <select [ngModel]="strategy()" (ngModelChange)="strategy.set($event)" [attr.aria-label]="'a11y.dup_strategy' | translate">
       <option value="videoId">{{ 'detail.strategy_videoId' | translate }}</option>
       <option value="normalizedTitle">{{ 'detail.strategy_normalizedTitle' | translate }}</option>
     </select>
@@ -10,7 +10,7 @@
       {{ 'detail.remove_dup' | translate }}
     </button>
 
-    <select [ngModel]="aiMode()" (ngModelChange)="aiMode.set($event)">
+    <select [ngModel]="aiMode()" (ngModelChange)="aiMode.set($event)" [attr.aria-label]="'a11y.ai_mode' | translate">
       <option value="genre">{{ 'detail.mode_genre' | translate }}</option>
       <option value="mood">{{ 'detail.mode_mood' | translate }}</option>
       <option value="decade">{{ 'detail.mode_decade' | translate }}</option>
@@ -35,7 +35,7 @@
       <p class="muted cross-org__dup-hint">{{ 'detail.dup_action_hint' | translate }}</p>
     }
     @if (stagedMsg(); as sm) {
-      <p class="accent cross-org__staged-msg">{{ sm }}</p>
+      <p class="accent cross-org__staged-msg" role="status">{{ sm }}</p>
     }
     @for (g of dupGroupsSorted(); track g.key) {
       <div class="cross-org__dup-group">
@@ -45,7 +45,7 @@
         @for (it of g.items; track it.playlistItemId) {
           <div class="row cross-org__dup-row">
             @if (it.thumbnailUrl) {
-              <img [src]="it.thumbnailUrl" class="thumb" alt="" />
+              <img [src]="it.thumbnailUrl" class="thumb" alt="" width="84" height="56" loading="lazy" />
             }
             <div class="flex-fill">
               <a [href]="'https://www.youtube.com/watch?v=' + it.videoId + '&list=' + playlistId()" target="_blank"

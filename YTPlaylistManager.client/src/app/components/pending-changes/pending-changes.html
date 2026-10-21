@@ -1,6 +1,6 @@
 @if (svc.count() > 0 && !svc.open()) {
   <button class="pending-chip" (click)="svc.open.set(true)">
-    <i class="fa-solid fa-cloud-arrow-up"></i>
+    <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
     <span class="pending-chip__count">{{ svc.count() }}</span>
     <span class="pending-chip__label">{{ 'pending.chip' | translate:{ n: svc.count() } }} · ~{{ svc.totalQuota() }}u</span>
   </button>
@@ -9,8 +9,8 @@
 @if (svc.open()) {
   <app-modal size="wide" (dismiss)="close()">
       <div class="row row--between">
-        <h3 class="modal__title"><i class="fa-solid fa-cloud-arrow-up"></i> {{ 'pending.title' | translate }}</h3>
-        <button class="secondary pending__close" (click)="close()"><i class="fa-solid fa-xmark"></i></button>
+        <h3 class="modal__title"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> {{ 'pending.title' | translate }}</h3>
+        <button class="secondary pending__close" (click)="close()" [attr.aria-label]="'a11y.close' | translate"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
       </div>
       <p class="muted modal__intro">{{ 'pending.intro' | translate }}</p>
 
@@ -22,10 +22,10 @@
       }
 
       @if (msg(); as m) {
-        <div class="card card--accent pending__note">{{ m }}</div>
+        <div class="card card--accent pending__note" role="status">{{ m }}</div>
       }
       @if (error(); as e) {
-        <div class="card danger pending__note">{{ e }}</div>
+        <div class="card danger pending__note" role="alert">{{ e }}</div>
       }
 
       @if (svc.count() === 0) {
@@ -57,19 +57,19 @@
             <div class="muted pending__quota">{{ 'playlists.pending_quota' | translate:{ quota: pu.estimatedQuotaUnits } }}</div>
             @if (pu.targetMissing) {
               <div class="card danger pending__warning">
-                <i class="fa-solid fa-triangle-exclamation"></i>
+                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
                 {{ 'pending.target_missing' | translate:{ title: pu.targetPlaylistTitle } }}
               </div>
             }
             @if (pu.targetLocked) {
               <div class="card danger pending__warning">
-                <i class="fa-solid fa-lock"></i>
+                <i class="fa-solid fa-lock" aria-hidden="true"></i>
                 {{ 'pending.target_locked' | translate:{ title: pu.targetPlaylistTitle } }}
               </div>
             }
             @if (pu.sourceTitles.length > 0) {
               <div class="muted danger pending__quota">
-                <i class="fa-solid fa-trash"></i> {{ 'playlists.pending_will_delete' | translate:{ sources: pu.sourceTitles.join(', ') } }}
+                <i class="fa-solid fa-trash" aria-hidden="true"></i> {{ 'playlists.pending_will_delete' | translate:{ sources: pu.sourceTitles.join(', ') } }}
               </div>
             }
             <details>
@@ -78,7 +78,7 @@
                 @for (s of pu.items; track s.videoId) {
                   <div class="row row--item">
                     @if (s.thumbnailUrl) {
-                      <img [src]="s.thumbnailUrl" class="thumb" alt="" />
+                      <img [src]="s.thumbnailUrl" class="thumb" alt="" width="84" height="56" loading="lazy" />
                     }
                     <div>{{ s.title }}</div>
                   </div>
@@ -108,19 +108,19 @@
                 <div class="pending__title">{{ m.title }}</div>
                 @if (m.addTo.length) {
                   <div class="row row--tags">
-                    <span class="muted"><i class="fa-solid fa-plus"></i> {{ 'cross.move_add' | translate }}</span>
+                    <span class="muted"><i class="fa-solid fa-plus" aria-hidden="true"></i> {{ 'cross.move_add' | translate }}</span>
                     @for (t of m.addTo; track t) { <span class="tag">{{ t }}</span> }
                   </div>
                 }
                 @if (m.removeFrom.length) {
                   <div class="row row--tags">
-                    <span class="muted"><i class="fa-solid fa-minus"></i> {{ 'cross.move_remove' | translate }}</span>
+                    <span class="muted"><i class="fa-solid fa-minus" aria-hidden="true"></i> {{ 'cross.move_remove' | translate }}</span>
                     @for (t of m.removeFrom; track t) { <span class="tag">{{ t }}</span> }
                   </div>
                 }
                 @if (m.missingTargets.length) {
                   <div class="muted danger pending__quota">
-                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
                     {{ 'pending.moves_missing' | translate:{ lists: m.missingTargets.join(', ') } }}
                   </div>
                 }

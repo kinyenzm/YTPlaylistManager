@@ -1,4 +1,4 @@
-<div class="segmented" [attr.aria-label]="'app.lang.label' | translate">
-  <button [class.active]="current() === 'es'" (click)="onChange('es')" lang="es">ES</button>
-  <button [class.active]="current() === 'en'" (click)="onChange('en')" lang="en">EN</button>
+<div class="segmented" role="group" [attr.aria-label]="'app.lang.label' | translate">
+  <button type="button" [class.active]="current() === 'es'" [attr.aria-pressed]="current() === 'es'" (click)="onChange('es')" lang="es">ES</button>
+  <button type="button" [class.active]="current() === 'en'" [attr.aria-pressed]="current() === 'en'" (click)="onChange('en')" lang="en">EN</button>
 </div>

@@ -1,12 +1,19 @@
 @if (open()) {
   <div class="cmd-palette__backdrop" (click)="close()">
-    <div class="cmd-palette__panel" (click)="$event.stopPropagation()">
+    <div class="cmd-palette__panel" role="dialog" aria-modal="true"
+         [attr.aria-label]="'a11y.search' | translate" (click)="$event.stopPropagation()">
 
       <div class="cmd-palette__input-row">
-        <i class="fa-solid fa-magnifying-glass cmd-palette__icon--search"></i>
+        <i class="fa-solid fa-magnifying-glass cmd-palette__icon--search" aria-hidden="true"></i>
         <input
           id="cp-input"
           class="cmd-palette__input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="cp-results"
+          [attr.aria-expanded]="allItems().length > 0"
+          [attr.aria-activedescendant]="allItems().length > 0 ? 'cp-opt-' + activeIndex() : null"
+          [attr.aria-label]="'a11y.search' | translate"
           [value]="rawQuery()"
           (input)="onQuery($any($event.target).value)"
           (keydown)="onKey($event)"
@@ -15,20 +22,21 @@
           spellcheck="false"
         />
         @if (loading()) {
-          <i class="fa-solid fa-circle-notch fa-spin cmd-palette__icon--spin"></i>
+          <i class="fa-solid fa-circle-notch fa-spin cmd-palette__icon--spin" aria-hidden="true"></i>
         } @else if (rawQuery().length > 0) {
-          <button class="cmd-palette__clear" (click)="onQuery('')" tabindex="-1">
-            <i class="fa-solid fa-xmark"></i>
+          <button type="button" class="cmd-palette__clear" (click)="onQuery('')" tabindex="-1"
+                  [attr.aria-label]="'a11y.clear_search' | translate">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
           </button>
         } @else {
-          <span class="cmd-palette__kbd">Esc</span>
+          <kbd class="cmd-palette__kbd">Esc</kbd>
         }
       </div>
 
-      <div class="cmd-palette__results">
+      <div class="cmd-palette__results" id="cp-results" role="listbox" [attr.aria-label]="'a11y.results' | translate">
         @if (loading()) {
           @for (_ of [1,2,3,4]; track $index) {
-            <div class="cmd-palette__item cmd-palette__item--skeleton">
+            <div class="cmd-palette__item cmd-palette__item--skeleton" aria-hidden="true">
               <span class="skeleton skeleton--thumb"></span>
               <div class="cmd-palette__item-body" style="gap:5px">
                 <span class="skeleton skeleton--title" style="width:55%"></span>
@@ -37,58 +45,71 @@
             </div>
           }
         }
-        @if (allItems().length === 0 && rawQuery().trim().length > 0 && !loading()) {
-          <div class="cmd-palette__empty">{{ 'cmd.empty' | translate:{ q: rawQuery() } }}</div>
-        }
 
         @if (filteredPlaylists().length > 0) {
-          <div class="cmd-palette__section">{{ 'cmd.section_playlists' | translate }}</div>
-          @for (p of filteredPlaylists(); track p.id; let i = $index) {
-            <div
-              class="cmd-palette__item"
-              [class.cmd-palette__item--active]="activeIndex() === i"
-              (mouseenter)="activeIndex.set(i)"
-              (click)="selectPlaylist(p)">
-              <img [src]="p.thumbnailUrl" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" />
-              <div class="cmd-palette__item-body">
-                <span class="cmd-palette__item-title">{{ p.title }}</span>
-                <span class="cmd-palette__item-meta">{{ p.itemCount }} {{ 'cmd.section_songs' | translate | lowercase }}</span>
+          <div role="group" aria-labelledby="cp-sec-playlists">
+            <div class="cmd-palette__section" id="cp-sec-playlists" role="presentation">{{ 'cmd.section_playlists' | translate }}</div>
+            @for (p of filteredPlaylists(); track p.id; let i = $index) {
+              <div
+                class="cmd-palette__item"
+                role="option"
+                [id]="'cp-opt-' + i"
+                [attr.aria-selected]="activeIndex() === i"
+                [class.cmd-palette__item--active]="activeIndex() === i"
+                (mouseenter)="activeIndex.set(i)"
+                (click)="selectPlaylist(p)">
+                <img [src]="p.thumbnailUrl" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" width="40" height="30" />
+                <div class="cmd-palette__item-body">
+                  <span class="cmd-palette__item-title">{{ p.title }}</span>
+                  <span class="cmd-palette__item-meta">{{ p.itemCount }} {{ 'cmd.section_songs' | translate | lowercase }}</span>
+                </div>
+                <i class="fa-solid fa-list cmd-palette__item-kind cmd-palette__item-kind--playlist" aria-hidden="true"></i>
               </div>
-              <i class="fa-solid fa-list cmd-palette__item-kind cmd-palette__item-kind--playlist"></i>
-            </div>
-          }
+            }
+          </div>
         }
 
         @if (groupedSongs().length > 0) {
-          <div class="cmd-palette__section">{{ 'cmd.section_songs' | translate }}</div>
-          @for (s of groupedSongs(); track s.videoId; let i = $index) {
-            <div
-              class="cmd-palette__item"
-              [class.cmd-palette__item--active]="activeIndex() === filteredPlaylists().length + i"
-              (mouseenter)="activeIndex.set(filteredPlaylists().length + i)"
-              (click)="selectSong(s)">
-              <img [src]="thumbUrl(s.videoId)" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" />
-              <div class="cmd-palette__item-body">
-                <span class="cmd-palette__item-title">{{ s.title }}</span>
-                <span class="cmd-palette__item-meta">{{ s.channelTitle }}</span>
-                @if (s.playlistTitles.length > 0) {
-                  <span class="cmd-palette__item-playlists">{{ s.playlistTitles.join(' · ') }}</span>
-                }
+          <div role="group" aria-labelledby="cp-sec-songs">
+            <div class="cmd-palette__section" id="cp-sec-songs" role="presentation">{{ 'cmd.section_songs' | translate }}</div>
+            @for (s of groupedSongs(); track s.videoId; let i = $index) {
+              <div
+                class="cmd-palette__item"
+                role="option"
+                [id]="'cp-opt-' + (filteredPlaylists().length + i)"
+                [attr.aria-selected]="activeIndex() === filteredPlaylists().length + i"
+                [class.cmd-palette__item--active]="activeIndex() === filteredPlaylists().length + i"
+                (mouseenter)="activeIndex.set(filteredPlaylists().length + i)"
+                (click)="selectSong(s)">
+                <img [src]="thumbUrl(s.videoId)" class="cmd-palette__thumb" onerror="this.style.display='none'" alt="" width="40" height="30" />
+                <div class="cmd-palette__item-body">
+                  <span class="cmd-palette__item-title">{{ s.title }}</span>
+                  <span class="cmd-palette__item-meta">{{ s.channelTitle }}</span>
+                  @if (s.playlistTitles.length > 0) {
+                    <span class="cmd-palette__item-playlists">{{ s.playlistTitles.join(' · ') }}</span>
+                  }
+                </div>
+                <i class="fa-brands fa-youtube cmd-palette__item-kind cmd-palette__item-kind--song" aria-hidden="true"></i>
               </div>
-              <i class="fa-brands fa-youtube cmd-palette__item-kind cmd-palette__item-kind--song"></i>
-            </div>
-          }
-        }
-
-        @if (rawQuery().trim().length === 0) {
-          <div class="cmd-palette__empty">
-            {{ 'cmd.hint' | translate }} · <kbd class="cmd-palette__kbd">↑↓</kbd> {{ 'cmd.footer_nav' | translate }} · <kbd class="cmd-palette__kbd">↵</kbd> {{ 'cmd.footer_open' | translate }}
+            }
           </div>
         }
       </div>
 
-      <div class="cmd-palette__footer">
-        <span><kbd class="cmd-palette__kbd">Ctrl K</kbd> {{ 'cmd.footer_toggle' | translate }}</span>
+      <div aria-live="polite">
+        @if (allItems().length === 0 && rawQuery().trim().length > 0 && !loading()) {
+          <div class="cmd-palette__empty">{{ 'cmd.empty' | translate:{ q: rawQuery() } }}</div>
+        }
+      </div>
+
+      @if (rawQuery().trim().length === 0) {
+        <div class="cmd-palette__empty">
+          {{ 'cmd.hint' | translate }} · <kbd class="cmd-palette__kbd">↑↓</kbd> {{ 'cmd.footer_nav' | translate }} · <kbd class="cmd-palette__kbd">↵</kbd> {{ 'cmd.footer_open' | translate }}
+        </div>
+      }
+
+      <div class="cmd-palette__footer" aria-hidden="true">
+        <span><kbd class="cmd-palette__kbd">Ctrl&nbsp;K</kbd> {{ 'cmd.footer_toggle' | translate }}</span>
         <span><kbd class="cmd-palette__kbd">↑↓</kbd> {{ 'cmd.footer_nav' | translate }}</span>
         <span><kbd class="cmd-palette__kbd">↵</kbd> {{ 'cmd.footer_open' | translate }}</span>
         <span><kbd class="cmd-palette__kbd">Esc</kbd> {{ 'cmd.footer_close' | translate }}</span>
