@@ -12,12 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.Auth" Version="1.76.0" />
-    <PackageReference Include="Google.Apis.Drive.v3" Version="1.76.0.4273" />
-    <PackageReference Include="Google.Apis.YouTube.v3" Version="1.76.0.4262" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
-    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="10.0.12" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.17.10" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.78.0" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.78.0.4327" />
+    <PackageReference Include="Google.Apis.YouTube.v3" Version="1.78.0.4325" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="10.0.15" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.21.0" />
   </ItemGroup>
 
   <!-- Referencia al proyecto Angular (para F5 multi-proyecto en Visual Studio).

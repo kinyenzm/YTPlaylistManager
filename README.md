@@ -288,7 +288,7 @@ Todo vive en `YTPlaylistManager.Server/data/` (configurable con `Storage:DataFol
 
 ## Despliegue con Docker
 
-El `Dockerfile` compila el frontend (Node 24), publica el backend (.NET SDK 10) y sirve el Angular ya compilado desde `wwwroot` del backend (un solo contenedor, mismo origen → no hace falta proxy en prod). La etapa del backend copia solo `YTPlaylistManager.Server`: así `dotnet publish` no intenta compilar el proyecto Angular, que necesitaría Node.js.
+El `Dockerfile` compila el frontend (Node 26), publica el backend (.NET SDK 10) y sirve el Angular ya compilado desde `wwwroot` del backend (un solo contenedor, mismo origen → no hace falta proxy en prod). La etapa del backend copia solo `YTPlaylistManager.Server`: así `dotnet publish` no intenta compilar el proyecto Angular, que necesitaría Node.js.
 
 ```bash
 docker build -t ytplaylistmanager .
@@ -328,7 +328,7 @@ La app queda en `http://localhost:8080`. Para que el login funcione en el conten
 - **Command palette** (`Ctrl+K`): búsqueda local sin cuota. Las playlists se filtran client-side y las canciones se buscan en cache vía `POST /api/songs/search`. Elegir una canción navega a `/organizar?q=<videoId>`: el organizador abre el modo "Por canción" con ese ID, busca y quita el parámetro (`replaceUrl`) para que *Atrás* no lo repita. Elegir una playlist navega a `/organizar/lista/:id`.
 - **Skeleton loading**: efecto shimmer CSS (`@keyframes shimmer`) en los estados de carga de listas y canciones.
 - **CSS**: todos los estilos viven en un único `styles.css` global (sin estilos por componente), con clases BEM (`card--selected`, `card__toggle`, `cmd-palette__item--active`, `cross-org__song-row`, etc.) junto a utilidades compartidas (`row`, `muted`, `tag`, `secondary`, `danger`). Casi no hay `style=""` inline: quedan algunos en `command-palette.html` y `cache-explorer.html`.
-- **Iconos**: [Font Awesome 6](https://fontawesome.com/) Free (6.5.2) vía CDN de cdnjs (`all.min.css`: sólido, regular y marcas).
+- **Iconos**: [Font Awesome 6](https://fontawesome.com/) Free (6.7.2) vía CDN de cdnjs (`all.min.css`: sólido, regular y marcas).
 - **Diseño "midnight studio"**: fondo tinta + acento lima `#c6f24e`, tipografías Bricolage Grotesque y Hanken Grotesk, design tokens CSS.
 - **Responsive**: en tablet el header queda en una fila y en teléfono en dos, con el buscador como ícono; los modos de *Organizar* se deslizan en su propia fila si no caben.
 - **Accesibilidad**: enlace *Saltar al contenido*. Los diálogos (incluido el command palette) se cierran con Esc, mantienen el foco dentro (Tab no sale al fondo) y lo devuelven al cerrar. Las tarjetas seleccionables tienen un botón equivalente para teclado y lector (`aria-pressed`), y las pestañas de *Historial* se recorren con flechas, Inicio y Fin. Con `prefers-reduced-motion` se apagan las animaciones, incluido el shimmer.

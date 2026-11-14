@@ -1,5 +1,5 @@
 # --- Build frontend ---
-FROM node:24-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /app/client
 COPY YTPlaylistManager.client/package*.json ./
 RUN npm ci
