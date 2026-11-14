@@ -291,9 +291,11 @@ Todo vive en `YTPlaylistManager.Server/data/` (configurable con `Storage:DataFol
 El `Dockerfile` compila el frontend (Node 26), publica el backend (.NET SDK 10) y sirve el Angular ya compilado desde `wwwroot` del backend (un solo contenedor, mismo origen → no hace falta proxy en prod). La etapa del backend copia solo `YTPlaylistManager.Server`: así `dotnet publish` no intenta compilar el proyecto Angular, que necesitaría Node.js.
 
 ```bash
-docker build -t ytplaylistmanager .
+docker build --pull -t ytplaylistmanager .
 docker run -p 8080:8080 -v ytpm-data:/app/data ytplaylistmanager
 ```
+
+`--pull` baja las últimas imágenes `sdk:10.0`, `aspnet:10.0` y `node:26-alpine`. Los parches de seguridad de .NET llegan con el runtime de la imagen, no con los paquetes NuGet; sin `--pull`, Docker puede reutilizar una imagen vieja en caché.
 
 Dentro del contenedor los datos (token OAuth, cache, pendientes, logs) viven en `/app/data`. Sin el volumen `-v ytpm-data:/app/data` se pierden al borrar el contenedor.
 
